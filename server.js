@@ -64,6 +64,20 @@ const state = {
 
 let reader = null;
 
+// A Ctrl+C or a normal shutdown request should take reader.ps1 down with
+// it — without this, killing node leaves the PowerShell sidecar running
+// forever in the background (it has no way to know its parent is gone),
+// polling shared memory in a tight loop that nothing will ever stop short
+// of Task Manager. Doesn't cover a forceful kill of node itself (SIGKILL
+// can't be intercepted by definition, on Windows or anywhere else) — that
+// half is reader.ps1's own job, checking that its parent PID is still
+// alive rather than trusting node to always tell it to stop.
+function stopReader() {
+  if (reader) reader.kill();
+}
+process.on('SIGINT', () => { stopReader(); process.exit(0); });
+process.on('SIGTERM', () => { stopReader(); process.exit(0); });
+
 function startReader() {
   if (FORCE_DEMO || !parseBlock) return;
   const script = path.join(ROOT, 'reader.ps1');
@@ -374,7 +388,7 @@ const server = http.createServer(async (req, res) => {
 
   if (url.pathname === '/api/status') {
     return json(res, 200, {
-      version: '2.9.2',
+      version: '2.9.5',
       source: state.source,
       connected: state.connected,
       game: state.game,
@@ -513,7 +527,7 @@ function localAddresses() {
     // With --port 0 the OS assigns the real port, so read it back rather
     // than printing the literal 0 that was passed in.
     const boundPort = server.address().port;
-    console.log('\n  Rig Radar 2.9.2\n');
+    console.log('\n  Rig Radar 2.9.5\n');
     for (const addr of localAddresses()) {
       console.log(`  Open on your phone:  http://${addr}:${boundPort}`);
     }

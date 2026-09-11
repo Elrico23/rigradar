@@ -4,6 +4,50 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.9.5** — The 2.9.3 orphan-cleanup fix had a real gap: it checked
+whether `reader.ps1`'s recorded parent PID still belonged to *any* live
+process, but Windows doesn't update a child's recorded parent PID when
+that parent exits, and does recycle PIDs — so an orphan whose real
+node.exe had long since died could see its old parent PID reassigned to
+some unrelated process later and conclude, wrongly, that its parent was
+still alive forever. Caught this in practice, not in theory: a stray
+reader from earlier in this session had its recorded parent PID
+reassigned to the Claude Code CLI host itself and kept running past the
+point the 2.9.3 fix should have caught it. Now records the parent's
+`StartTime` alongside its PID at launch and requires both to still
+match, which is what actually distinguishes "still my parent" from
+"something else now has that number."
+
+**2.9.4** — Tilt view zoomed the same as the flat view, so switching it on
+only bent the horizon without giving the close, cockpit-mounted-GPS feel
+it's meant to have — reported after actually comparing it against
+TruckSim GPS during the first live drive. The auto-zoom target formula
+never accounted for tilt at all; it now pulls in to half the usual
+distance when tilt and heading-up are both on, since the perspective
+compression already buys back the lookahead a wider flat view would
+otherwise need. Verified live: same speed, tilt off vs on measured at
+5.43 m/px vs 2.91 m/px — a ~1.9x closer view, visibly larger road
+geometry on screen.
+
+**2.9.3** — Fixed a real process leak, found because it was making actual
+gameplay laggy during the first live test: killing `node.exe` (however
+that happens — Task Manager, `Stop-Process -Force`, a crash) left
+`reader.ps1` running forever in the background, since a spawned child on
+Windows has no built-in way to know its parent is gone. Over many restarts
+in one dev session, that's many stray PowerShell processes each polling
+`Local\SCSTelemetry` in a tight 100ms loop, competing for the same shared
+memory the actual live game needed — plausibly a real contributor to the
+reported lag, on top of everything else this session had running at once.
+Two-sided fix: `server.js` now kills the reader on a normal shutdown
+(SIGINT/SIGTERM, i.e. Ctrl+C), and `reader.ps1` independently checks every
+~2s that its parent PID is still alive and self-terminates if not — the
+half that actually matters, since a forceful kill can't be intercepted by
+the thing being killed, only worked around from the other side. Verified
+by force-killing node mid-session and confirming the orphan exited within
+the 2s check window with no manual cleanup, then swept up several
+already-orphaned processes left over from this session's own restarts
+(one had been running the whole time, since well before this fix existed).
+
 **2.9.2** — A proper test pass across the whole app (settings, search, map
 controls, server API edge cases), asked for after the manoeuvre-arrow
 chase kept turning up nothing. Found three real bugs this time:

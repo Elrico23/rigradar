@@ -1218,7 +1218,13 @@ function tick(now) {
       view.centre.z = lerp(view.centre.z, telemetry.truck.z, Math.min(1, dt * 8));
     }
     if (prefs.autoZoom) {
-      const target = 1.6 + Math.min(telemetry.truck.speed, 110) * 0.055;
+      const base = 1.6 + Math.min(telemetry.truck.speed, 110) * 0.055;
+      // Tilt is meant to read as a close, cockpit-mounted GPS looking down
+      // the road, not the same top-down span with the horizon merely bent —
+      // the perspective compression already buys back the lookahead
+      // distance a wider flat view would otherwise need, so tilt pulls the
+      // base zoom in closer rather than leaving it unchanged.
+      const target = (prefs.tilt && prefs.headingUp) ? base * 0.5 : base;
       view.metresPerPixel = lerp(view.metresPerPixel, target, Math.min(1, dt * 1.5));
     }
   }
