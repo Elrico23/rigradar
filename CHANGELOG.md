@@ -40,11 +40,16 @@ process-level, not pixel-level, verification. One hiccup along the way:
 Electron's own postinstall binary download silently produced an empty
 `node_modules/electron/dist/` on the first `npm install`, even though npm
 reported exit code 0 — re-running `node node_modules/electron/install.js`
-by hand completed it. Not yet verified: a packaged installer via
-`npm run dist` (the `electron-builder` config is written — `extraResources`
-copies `server.js`/`lib`/`public`/`data` in alongside the app — but
-building and installing an actual `.exe` needs a GUI install/uninstall
-pass this environment can't drive).
+by hand completed it. `npm run dist` now confirmed too: it builds cleanly end to end —
+downloads its own Electron binary, bundles `server.js`/`lib`/`public`/
+`data` in via `extraResources`, and produces `dist\Rig Radar Setup
+1.0.0.exe` (139MB, mostly the compiled map data). Unsigned, since there's
+no code-signing certificate set up — Windows SmartScreen will show an
+"unknown publisher" warning on first run, which is expected and not a
+bug. Actually running the installer through its click-through wizard and
+confirming the installed shortcut launches correctly is still an
+outstanding hands-on check — this environment can build the `.exe` but
+can't drive a GUI installer to test it.
 
 **2.8.4** — Regenerated all four icon PNGs (light and dark, both sizes)
 with more safe-zone margin: the outer ring pulled in from 0.34×size to
