@@ -4,6 +4,15 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.8.2** — A near-black variant of the 2.8.1 icon (`icon-192-dark.png`,
+`icon-512-dark.png`): same rings, sweep, and truck glyph, background
+swapped from navy to near-black. Wired it up the one place a dark/light
+split actually works cross-browser today: the tab favicon, via
+`<link rel="icon" media="(prefers-color-scheme: dark)">`. The PWA
+installed-icon (manifest.json) still points at the single 2.8.1 set —
+the Web App Manifest spec has no equivalent per-scheme icon mechanism,
+so there's nothing to wire there.
+
 **2.8.1** — Regenerated the app icons (`icon-192.png`, `icon-512.png`) to
 match the 2.8.0 reskin; they'd been left over from the old amber palette.
 New design: a navy background, three concentric `--beacon` radar rings
