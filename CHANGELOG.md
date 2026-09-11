@@ -4,6 +4,96 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.9.2** — A proper test pass across the whole app (settings, search, map
+controls, server API edge cases), asked for after the manoeuvre-arrow
+chase kept turning up nothing. Found three real bugs this time:
+
+- **99.97% of ETS2's highway shields were malformed** — 2,981 of 2,982
+  compiled shields showed a raw token like `D_A9` or `NO_E6` instead of a
+  clean shield, because `formatShield()` in `tools/compile-map.mjs` was
+  written and verified against only ATS's icon format (`us400`, `i15` —
+  no prefix), and never checked against real ETS2 output, which prefixes
+  every route icon with a country code (`d_`, `no_`, `pl_`, 33 more).
+  Fixed the formatter to strip that prefix, and — since every real route
+  is numbered — used "no digit anywhere" to also correctly drop non-route
+  `type: "road"` POIs that were showing up as bogus shields alongside it
+  (toll booths, weigh/agricultural checkpoints, border crossings, one
+  stray "QUARRY"). Patched the already-compiled `data/ets2/signs.json`
+  and `data/ats/signs.json` in place by re-deriving each corrected label
+  from its current (mangled but information-preserving) one, rather than
+  needing to re-run the full parser — ATS had a smaller version of the
+  same issue (135 of 1981, mostly US state-route prefixes like `ca_r86`).
+  Verified live: shields now read "E 40", "A 4" instead of "D_E40",
+  "D_A4".
+- **The manoeuvre card's distance ignored the imperial setting entirely**
+  — turning on "Miles instead of km" correctly converted the speedometer,
+  speed limit, and trip distance, but the next-turn countdown, the "then"
+  preview, and the arrival-progress distance all had their own
+  independent, hardcoded metric-only formatting, never routed through
+  the existing `distance()` helper that already knew how to convert.
+  Added a shared `turnDistanceParts()` (feet under a mile, miles above,
+  mirroring the existing metres/km split) and pointed all three call
+  sites at it. Verified live: "Then ↰ 96ft" instead of "Then ↰ 29m" with
+  imperial on.
+- **A manual search destination that failed to route did so in total
+  silence** — `setDestination()` closed the search sheet before the
+  fetch even resolved and, on failure, just `return`ed with the map
+  otherwise untouched: no error, no indication anything had happened,
+  found while investigating why a Kaunas search pick came back 404
+  (a legitimate "no path found" for the truck's position at the time,
+  not a bug in itself, but the silent handling of it was). Now shows the
+  server's actual error message inline in the still-open search sheet
+  ("Unknown destination.", "No path found between those points.") instead
+  of closing and saying nothing.
+
+Also verified clean with no changes needed: all five settings toggles,
+zoom clamping at both extremes (60+ rapid clicks each direction, stayed
+finite and bounded), recenter and north-up/heading-up toggling, the
+tilted-view projection math (an initial test looked like a null result
+but turned out to be a flawed test — picked a point not actually ahead of
+the truck's heading), and a battery of server API edge cases (malformed
+JSON, missing body, unknown game, empty/short/`<script>`-injection search
+queries, unknown routes, inverted and whole-map geo bounds) — all
+handled with the right status code and no crash.
+
+**2.9.1** — Found a real bug while re-investigating the manoeuvre-arrow
+report a third time: `sw.js`'s cache name was hardcoded to
+`rig-radar-v2.7.1` and never bumped across eleven-plus releases since,
+while its `fetch` handler served cached files with no revalidation. Any
+device where the service worker successfully installed around that time
+would silently keep serving that exact shell forever — every arrow fix
+from 2.7.3 through 2.7.11 included — which would perfectly explain
+"still broken, every turn, consistently" while every fresh test here
+came back clean (the fix really was already live, just never reaching a
+device stuck on the old cache). Bumped the cache name to match the
+current version and changed `fetch` to stale-while-revalidate (serve
+the cached copy for a fast open, but always refetch in the background
+and update the cache), so this class of bug can't silently recur even
+if the cache name isn't bumped by hand next time.
+
+Important honesty check, not a confirmed fix: proving the cache-cleanup
+logic works required manually planting a fake stale cache under the old
+name, since nothing in this session had ever actually populated one —
+and doing that surfaced something bigger. `navigator.serviceWorker.
+register()` fails outright in this environment with "an unknown error
+occurred when fetching the script," the exact console message that's
+shown up in every single console check this whole session and been
+dismissed each time as leftover noise. It wasn't. Plain `fetch('/sw.js')`
+works fine (200, correct content) — only the ServiceWorker registration
+API itself fails here, which points at an environment restriction on
+this Browser pane rather than a code bug (`fetch('/sw.js')` succeeding
+while `register()` fails isn't something app code controls either way).
+That raises a real question this session cannot answer: service workers
+require a secure context, and `localhost` counts but a phone reaching
+the server over `http://192.168.x.x` (a plain LAN IP) does not on most
+mobile browsers — so it's possible the service worker has never
+successfully installed on the phone at all, in which case this cache
+bug, however real, isn't what's actually being seen there. The desktop
+app is unaffected either way (Electron's window loads `http://localhost`,
+which is always a secure context). Asked for a screenshot of the actual
+broken shape on the phone to settle which explanation is right, rather
+than guess a fourth time.
+
 **2.9.0** — A desktop shell, in `desktop/`, for a PC-side counterpart to
 the phone PWA (the ask was "a PC program just like TruckSim Telemetry").
 It's a thin Electron wrapper, kept deliberately separate from the root

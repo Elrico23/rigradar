@@ -309,16 +309,32 @@ try {
   const pois = readJson('pois');
   signs = pois
     .filter((p) => p.type === 'road' && p.icon)
-    .map((p) => ({ x: p.x, z: p.y, label: formatShield(p.icon) }));
+    .map((p) => ({ x: p.x, z: p.y, label: formatShield(p.icon) }))
+    .filter((s) => s.label);
   console.log(`  road signs: ${signs.length} of ${pois.length} POIs`);
 } catch {
   console.log('  ⚠ no pois file found — skipping road signs');
 }
 
-/** "us400" -> "US 400", "i15" -> "I 15" — splits the letters from the digits. */
+/** "us400" -> "US 400", "i15" -> "I 15" (ATS: no country prefix at all) —
+ * splits the letters from the digits. ETS2 icons additionally carry a
+ * country code ahead of the route itself ("d_a9" for a German A9, "no_e6"
+ * for a Norwegian E6) which needs stripping first, or every European
+ * shield renders as the raw token ("D_A9") instead of a shield — this was
+ * silently wrong for 2981 of ETS2's 2982 compiled signs before anyone
+ * checked the actual output instead of just the one hand-picked ATS
+ * example in this comment. A handful of `type: "road"` POIs also aren't
+ * route shields at all (toll booths, weigh/agricultural checkpoints,
+ * border crossings, and at least one stray "QUARRY") — every real route
+ * is numbered, so "no digit anywhere once the prefix is gone" is what
+ * actually distinguishes those, rather than hardcoding each facility
+ * name one at a time as they turn up. Returns null for those, filtered
+ * out by the caller. */
 function formatShield(icon) {
-  const m = /^([a-z]+)(\d.*)$/i.exec(icon);
-  return m ? `${m[1].toUpperCase()} ${m[2]}` : icon.toUpperCase();
+  const stripped = icon.replace(/^[a-z]{1,3}_/i, '');
+  if (!/\d/.test(stripped)) return null;
+  const m = /^([a-z]+)(\d.*)$/i.exec(stripped);
+  return m ? `${m[1].toUpperCase()} ${m[2]}` : stripped.toUpperCase();
 }
 
 writeFileSync(join(OUT_DIR, 'signs.json'), JSON.stringify(signs));

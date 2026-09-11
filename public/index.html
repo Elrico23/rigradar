@@ -1295,6 +1295,7 @@ document.getElementById('compass').onclick = () => {
 // ---------------------------------------------------------------------------
 
 const KM_PER_MILE = 1.609344;
+const FT_PER_METRE = 3.28084;
 const RPM_CIRCUMFERENCE = 2 * Math.PI * 38; // must match the SVG circle's r=38
 
 function distance(metres) {
@@ -1304,6 +1305,24 @@ function distance(metres) {
     return mi < 10 ? `${mi.toFixed(1)} mi` : `${Math.round(mi)} mi`;
   }
   return km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`;
+}
+
+// Same near/far split as distance() above, but returned as separate
+// value/unit parts (for the manoeuvre card's two-span layout) and with a
+// near-range unit of its own (feet, not metres, under imperial) rather than
+// switching units only past the 1000 threshold — a close turn is exactly
+// the number a driver glances at most, so it can't be the one distance in
+// the app that stays metric regardless of the imperial setting.
+function turnDistanceParts(metres) {
+  if (prefs.imperial) {
+    const ft = metres * FT_PER_METRE;
+    if (ft < 1000) return { value: String(Math.round(ft)), unit: 'ft' };
+    const mi = metres / 1000 / KM_PER_MILE;
+    return { value: mi < 10 ? mi.toFixed(1) : String(Math.round(mi)), unit: 'mi' };
+  }
+  if (metres < 1000) return { value: String(Math.round(metres)), unit: 'm' };
+  const km = metres / 1000;
+  return { value: km < 10 ? km.toFixed(1) : String(Math.round(km)), unit: 'km' };
 }
 
 function duration(seconds) {
@@ -1450,8 +1469,9 @@ function updateManoeuvre(t) {
     }
     card.classList.add('on');
     card.classList.remove('arrived');
-    $('turnDist').textContent = d < 1000 ? Math.round(d) : (d / 1000).toFixed(1);
-    $('turnUnit').textContent = d < 1000 ? 'm' : 'km';
+    const nextParts = turnDistanceParts(d);
+    $('turnDist').textContent = nextParts.value;
+    $('turnUnit').textContent = nextParts.unit;
     $('turnRoad').textContent = `Turn ${next.direction}`;
     setManoeuvreArrow(next.angle, next.direction);
 
@@ -1463,8 +1483,8 @@ function updateManoeuvre(t) {
     const thenEl = $('thenPreview');
     if (then) {
       const thenD = Math.hypot(then.x - next.x, then.z - next.z);
-      const thenDist = thenD < 1000 ? `${Math.round(thenD)}m` : `${(thenD / 1000).toFixed(1)}km`;
-      thenEl.textContent = `Then ${then.direction === 'left' ? '↰' : '↱'} ${thenDist}`;
+      const thenParts = turnDistanceParts(thenD);
+      thenEl.textContent = `Then ${then.direction === 'left' ? '↰' : '↱'} ${thenParts.value}${thenParts.unit}`;
       thenEl.classList.add('on');
     } else {
       thenEl.classList.remove('on');
@@ -1488,8 +1508,9 @@ function updateManoeuvre(t) {
 
   card.classList.add('on');
   card.classList.remove('arrived');
-  $('turnDist').textContent = dFinal < 1000 ? Math.round(dFinal) : (dFinal / 1000).toFixed(1);
-  $('turnUnit').textContent = dFinal < 1000 ? 'm' : 'km';
+  const finalParts = turnDistanceParts(dFinal);
+  $('turnDist').textContent = finalParts.value;
+  $('turnUnit').textContent = finalParts.unit;
   $('turnRoad').textContent = 'Continue straight';
   setManoeuvreArrow(0, 'right');
 }
@@ -1694,16 +1715,32 @@ async function fetchRouteTo(destId, fromXZ) {
   return res.ok ? await res.json() : null;
 }
 
+// Deliberately doesn't reuse fetchRouteTo(): that helper collapses any
+// failure to a bare null, which is fine for the silent auto-retry in
+// checkRouteDeviation but not here — a manual pick is a direct user
+// action, and closing the sheet with no explanation when it fails (e.g.
+// "no path found", picked before the map finished loading) left someone
+// staring at the map with zero indication anything had gone wrong.
 async function setDestination(item) {
-  closeSheets();
+  const box = $('searchResults');
   try {
-    const result = await fetchRouteTo(item.id, telemetry?.truck);
-    if (!result) return;
-    route = result;
+    const res = await fetch(`/api/route?${gameQuery()}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ to: item.id, from: telemetry?.truck }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      box.className = 'empty';
+      box.textContent = body?.message || `Could not route to ${item.name}.`;
+      return;
+    }
+    route = await res.json();
     routeSource = { mode: 'manual', destId: item.id };
+    closeSheets();
   } catch {
-    route = null;
-    routeSource = null;
+    box.className = 'empty';
+    box.textContent = 'Could not reach the server.';
   }
 }
 
