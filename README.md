@@ -17,6 +17,7 @@ Start here: SETUP.md. History of how it got here: CHANGELOG.md.
     lib/router.js                Dijkstra pathfinding + turn-by-turn manoeuvres
     reader.ps1                   PowerShell sidecar reading SCS shared memory
     public/                      the phone app, single file
+    desktop/                     optional PC window + tray icon (Electron)
     tools/inspect-parser-*.mjs   reports the shape of parsed game data
     tools/compile-map.mjs        parser output -> data/<game>/ (roads, search,
                                   signs, city areas, ferries, routing)
@@ -35,3 +36,9 @@ and an experimental perspective-tilt view — all toggleable in Settings, all
 confirmed working against real ATS/ETS2 game data at real map scale
 (218k+ roads, real turn-by-turn routing). A cool cyan-on-navy look, in its
 own right rather than copying any one app's exact palette.
+
+An optional PC counterpart lives in `desktop/`: a standalone window with a
+tray icon and a Windows-autostart toggle, for a TruckSim-Telemetry-style
+companion on the PC itself rather than a browser tab. It's the one part of
+the project with actual npm dependencies (Electron); the server it wraps
+is untouched and still runs standalone with zero installs. See SETUP.md.

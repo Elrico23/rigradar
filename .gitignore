@@ -2,3 +2,5 @@ data/
 .claude/
 .server.log
 *.log
+desktop/node_modules/
+desktop/dist/

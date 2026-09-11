@@ -1,0 +1,44 @@
+{
+  "name": "rig-radar-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Standalone desktop window for Rig Radar, with a tray icon and Windows autostart.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "devDependencies": {
+    "electron": "^44.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.rigradar.desktop",
+    "productName": "Rig Radar",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "tray-icon.png",
+      "tray-icon@2x.png",
+      "build/icon.ico"
+    ],
+    "extraResources": [
+      { "from": "../server.js", "to": "app/server.js" },
+      { "from": "../lib", "to": "app/lib" },
+      { "from": "../public", "to": "app/public" },
+      { "from": "../data", "to": "app/data" }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}

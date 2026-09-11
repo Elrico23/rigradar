@@ -4,6 +4,48 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.9.0** — A desktop shell, in `desktop/`, for a PC-side counterpart to
+the phone PWA (the ask was "a PC program just like TruckSim Telemetry").
+It's a thin Electron wrapper, kept deliberately separate from the root
+project so `server.js` stays exactly what it's always been — zero
+dependencies, no `npm install`, still runs standalone with plain
+`node server.js`. `desktop/main.js` spawns that same, unmodified
+`server.js` as a child process (via `ELECTRON_RUN_AS_NODE`, so it needs
+no separate Node install on the machine running the app), points a
+chrome-less window at it, and adds a tray icon with a "Start with
+Windows" checkbox (`app.setLoginItemSettings`) and a "Quit" item —
+closing the window just hides it, same pattern as TruckSim Telemetry
+and similar always-on companion apps.
+
+New icon assets specifically for this: the phone icon's full-bleed
+navy-square design (built for OS home-screen masking) doesn't suit a
+Windows taskbar/tray icon, which has no equivalent masking and wants a
+transparent background. Added a separate simplified badge — a solid
+`--beacon` circle with a bold two-shape truck glyph, no fine linework —
+rendered at 16/32/48/256px into `desktop/build/icon.ico` (hand-encoded,
+PNG-compressed ICO entries) plus standalone `desktop/tray-icon.png` /
+`@2x.png`, since the phone icon's rings and windshield accent were
+legible at 512px but would just blur into noise at tray-icon scale.
+
+Verified: `npm install` inside `desktop/`, then `npm start` — the spawned
+`server.js` child came up and logged its normal startup sequence (both
+maps loaded, phone/PC URLs printed), `/api/status` answered correctly
+over HTTP while the app was running, and Windows showed a live `electron`
+process with the main window's title actually reading "Rig Radar" (the
+title comes from the loaded page, so this confirms the window rendered
+the real app rather than a blank/error page) — the one thing this
+environment can't do is visually screenshot that native window the way
+the phone PWA gets checked in a browser pane, so take that as
+process-level, not pixel-level, verification. One hiccup along the way:
+Electron's own postinstall binary download silently produced an empty
+`node_modules/electron/dist/` on the first `npm install`, even though npm
+reported exit code 0 — re-running `node node_modules/electron/install.js`
+by hand completed it. Not yet verified: a packaged installer via
+`npm run dist` (the `electron-builder` config is written — `extraResources`
+copies `server.js`/`lib`/`public`/`data` in alongside the app — but
+building and installing an actual `.exe` needs a GUI install/uninstall
+pass this environment can't drive).
+
 **2.8.4** — Regenerated all four icon PNGs (light and dark, both sizes)
 with more safe-zone margin: the outer ring pulled in from 0.34×size to
 ~0.28×size, comfortably inside the 0.40×size circle Android/iOS

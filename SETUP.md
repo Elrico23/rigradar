@@ -67,6 +67,39 @@ connection, ahead of firewall or network settings.
 
 ---
 
+## Optional — a PC window too
+
+Everything above already works from any browser on the PC itself (the
+server prints an `http://localhost:3000` line alongside the phone address).
+`desktop/` wraps that same server in an actual desktop window with a tray
+icon, for a TruckSim-Telemetry-style companion on the PC instead of a
+browser tab.
+
+```powershell
+cd "$env:USERPROFILE\Desktop\rig-radar-v2\desktop"
+npm install
+npm start
+```
+
+This is the one part of the project that isn't zero-dependency —
+`desktop/` has its own `package.json` and pulls in Electron, kept separate
+so `server.js` itself never needs `npm install`. `npm start` spawns the
+same, unmodified `server.js` underneath, so the PC window and your phone
+are always looking at identical live data.
+
+Closing the window minimises it to the tray rather than quitting — use
+**Quit Rig Radar** from the tray icon's right-click menu to actually stop
+it. Right-click → **Start with Windows** to have it come up automatically
+at login.
+
+To build an installable `.exe` instead of running from source:
+
+```powershell
+npm run dist
+```
+
+---
+
 ## Phase 2 — build the map
 
 This is the long pole. Set aside an evening for the first run.
