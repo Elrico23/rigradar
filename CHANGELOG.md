@@ -4,6 +4,16 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.8.3** — Listed the dark icon variants in `manifest.json` too, as
+`purpose: "any"` entries alongside the existing `purpose: "any maskable"`
+navy ones. Worth knowing: the Web App Manifest spec has no
+prefers-color-scheme concept for icons, so this doesn't make an
+installed home-screen icon switch with the OS theme — Android/iOS just
+pick from whatever's listed, generally preferring a maskable match for
+the adaptive icon slot, which is why the navy set keeps that purpose
+and the dark set doesn't. The favicon `<link>` swap from 2.8.2 is still
+the only genuinely theme-reactive piece.
+
 **2.8.2** — A near-black variant of the 2.8.1 icon (`icon-192-dark.png`,
 `icon-512-dark.png`): same rings, sweep, and truck glyph, background
 swapped from navy to near-black. Wired it up the one place a dark/light
