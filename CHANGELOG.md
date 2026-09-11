@@ -46,10 +46,18 @@ downloads its own Electron binary, bundles `server.js`/`lib`/`public`/
 1.0.0.exe` (139MB, mostly the compiled map data). Unsigned, since there's
 no code-signing certificate set up — Windows SmartScreen will show an
 "unknown publisher" warning on first run, which is expected and not a
-bug. Actually running the installer through its click-through wizard and
-confirming the installed shortcut launches correctly is still an
-outstanding hands-on check — this environment can build the `.exe` but
-can't drive a GUI installer to test it.
+bug. Actually running it is now verified too — via NSIS's silent `/S`
+flag rather than clicking through the wizard, since this environment
+can't drive a GUI installer. It installed cleanly to
+`%LOCALAPPDATA%\Programs\Rig Radar\` with a Start Menu shortcut, a
+desktop shortcut, and a registry uninstall entry, and launching the
+installed `Rig Radar.exe` came up as a process actually named "Rig
+Radar" (electron-builder renames the binary to the product name) with
+its server answering `/api/status` and both maps loaded — confirming
+the packaged `extraResources` path resolves correctly, which the
+earlier dev-mode (`electron .`) check never actually exercised, since
+that always ran against the source tree directly rather than a packaged
+copy.
 
 **2.8.4** — Regenerated all four icon PNGs (light and dark, both sizes)
 with more safe-zone margin: the outer ring pulled in from 0.34×size to
