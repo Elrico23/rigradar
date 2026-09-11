@@ -65,22 +65,6 @@
   .wallet b { color: var(--beacon); font-weight: 600; }
   .wallet span { color: var(--fog); }
 
-  .damage {
-    position: absolute; top: calc(58px + var(--safe-t)); left: 12px;
-    display: flex; align-items: center; gap: 6px;
-    padding: 4px 10px; border-radius: 999px;
-    background: rgba(10,14,20,.82);
-    border: 1px solid var(--kerb);
-    backdrop-filter: blur(12px);
-    font-size: 12px; color: var(--fog);
-    opacity: 0; transform: translateY(-4px);
-    transition: opacity .2s ease, transform .2s ease;
-  }
-  .damage.on { opacity: 1; transform: none; }
-  .damage svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2; }
-  .damage.warn { color: var(--beacon); }
-  .damage.critical { color: var(--warn); }
-
   .compass {
     position: absolute; top: calc(10px + var(--safe-t)); right: 12px;
     width: 54px; height: 54px; border-radius: 50%;
@@ -122,14 +106,6 @@
     transition: opacity .2s ease, transform .2s ease, top .15s ease;
   }
   .manoeuvre.on { opacity: 1; transform: none; }
-  /* .damage sits right above at top:58px and is ~24px tall, so its bottom
-     edge (82px) lands inside .manoeuvre's own top (64px) whenever both are
-     visible at once — a wear badge showing during an active turn, not a
-     rare combination. Only push .manoeuvre down when .damage is actually
-     on screen (pristine-truck drives, the common case, keep the tighter
-     spacing) rather than permanently reserving room neither element uses
-     most of the time. */
-  .layer:has(.damage.on) .manoeuvre { top: calc(90px + var(--safe-t)); }
   .manoeuvre .dist { font-size: 40px; font-weight: 700; line-height: .9; }
   .manoeuvre .dist i { font-size: 18px; font-style: normal; color: var(--fog); margin-left: 3px; }
   .manoeuvre .road { font-size: 13px; color: var(--fog); margin-top: 4px; }
@@ -147,96 +123,6 @@
      two even gaps (verified 39px/39px top vs bottom against this font). */
   .manoeuvre.arrived .road { color: var(--go); font-size: 21px; font-weight: 700; margin-top: 0;
                               line-height: 1; padding-top: 4px; }
-
-  /* ---- gauges -------------------------------------------------------- */
-
-  .gauge {
-    position: absolute;
-    display: grid; place-items: center;
-    border-radius: 50%;
-    background: radial-gradient(circle at 50% 35%, #1a222c, #0a0e14 72%);
-    border: 1px solid var(--kerb);
-  }
-
-  #gear { left: 14px; bottom: 232px; width: 84px; height: 84px; border: 1px solid var(--kerb); }
-  .rpm-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
-  .rpm-track { fill: none; stroke: var(--kerb); stroke-width: 5; }
-  .rpm-arc { fill: none; stroke: var(--beacon); stroke-width: 5; stroke-linecap: round;
-    transition: stroke-dashoffset .15s linear, stroke .15s linear; }
-  #gear .cap { font-size: 10px; color: var(--fog); letter-spacing: .16em; }
-  #gear .val { font-size: 34px; font-weight: 700; line-height: 1; }
-
-  #speedo { left: 14px; bottom: 132px; width: 96px; height: 96px; }
-  #speedo .val { font-size: 36px; font-weight: 700; line-height: 1; }
-  #speedo .cap { font-size: 11px; color: var(--fog); }
-
-  .limit {
-    position: absolute; left: 92px; bottom: 200px;
-    width: 44px; height: 44px; border-radius: 50%;
-    background: var(--chalk); color: #10161c;
-    border: 5px solid var(--warn);
-    display: grid; place-items: center;
-    font-size: 17px; font-weight: 700;
-  }
-  .limit.hidden { display: none; }
-  #speedo.over .val { color: var(--warn); }
-
-  #fuel { right: 14px; bottom: 132px; width: 96px; height: 96px; }
-  #fuel .val { font-size: 21px; font-weight: 700; line-height: 1.1; }
-  #fuel .cap { font-size: 11px; color: var(--fog); }
-  #fuel.low .val { color: var(--warn); }
-
-  /* Every offset above is tuned for a real phone's height (600px+). Below
-     that, the manoeuvre card (top-anchored) and the gear gauge
-     (bottom-anchored, stacked above speedo/fuel) run out of shared room
-     and land on top of each other — on a genuinely short viewport (a
-     landscape phone, a squeezed split-screen window) gear's top edge can
-     end up above the manoeuvre card's bottom edge entirely. Compacting
-     the manoeuvre card alone can't fix that: the gauge cluster's own
-     stacked offsets (gear above speedo/fuel above the waybill) need to
-     shrink too, or there's nowhere left to reclaim the room from. */
-  @media (max-height: 480px) {
-    .manoeuvre {
-      top: calc(40px + var(--safe-t));
-      padding: 6px 14px 6px 10px; gap: 10px;
-    }
-    .manoeuvre svg { width: 22px; height: 22px; }
-    .manoeuvre .dist { font-size: 24px; }
-    .manoeuvre .dist i { font-size: 11px; }
-    .manoeuvre .road { font-size: 10px; margin-top: 2px; }
-    .manoeuvre.arrived .road { font-size: 14px; padding-top: 3px; }
-    /* No room for a third line here — the compact card's height was tuned
-       against the gear gauge's own compact position with only 18-24px to
-       spare (see the max-height block below); adding the "then" preview's
-       height back in would eat that margin. Hidden rather than shrunk
-       further, since the immediate turn matters more than a preview of
-       the one after it when space is this tight. */
-    .manoeuvre .then.on { display: none; }
-
-    #gear { width: 60px; height: 60px; bottom: 180px; }
-    #gear .val { font-size: 24px; }
-    #gear .cap { font-size: 8px; }
-
-    #speedo, #fuel { width: 68px; height: 68px; bottom: 96px; }
-    #speedo .val { font-size: 26px; }
-    #fuel .val { font-size: 16px; }
-
-    .limit { width: 32px; height: 32px; bottom: 148px; left: 56px; border-width: 4px; font-size: 12px; }
-
-    /* There's no longer room here to also clear .damage the way the
-       normal-mode rule above does — closing that gap would need roughly
-       30px more than compacting alone can free up (measured at 348px:
-       manoeuvre's earliest safe top sits ~30px below gear's own top edge).
-       Hiding the badge while a turn card is up front trades a wear
-       percentage for turn-by-turn directions, which is the right side to
-       give up when there isn't room for both — and resets .manoeuvre back
-       to its own compact top instead of inheriting the normal-mode rule's
-       90px, which would otherwise win here too (same selector specificity,
-       so without this the last-defined rule — the one above, for tall
-       viewports — would still apply even though there's no room for it). */
-    .layer:has(.manoeuvre.on) .damage { display: none; }
-    .layer:has(.damage.on) .manoeuvre { top: calc(40px + var(--safe-t)); }
-  }
 
   .zoom {
     position: absolute; right: 14px; bottom: 256px;
@@ -264,16 +150,28 @@
     border: 1px solid var(--kerb);
     backdrop-filter: blur(16px);
   }
-  .waybill .to { font-size: 19px; font-weight: 600; color: var(--signal);
+  .waybill .to { font-size: 15px; font-weight: 600; color: var(--signal);
                  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .waybill .meta { display: flex; align-items: center; gap: 5px;
-                   margin-top: 5px; font-size: 13px; color: var(--fog);
-                   white-space: nowrap; overflow: hidden; }
-  .waybill .meta b { color: var(--chalk); font-weight: 600; }
-  .tag { padding: 1px 5px; border-radius: 4px; font-size: 10px; font-weight: 700;
-         letter-spacing: .02em; }
-  .tag.real { background: rgba(111,191,115,.16); color: var(--go); }
-  .tag.sim  { background: rgba(45,212,200,.16); color: var(--beacon); }
+  /* Clock / ETA / distance / speed+limit, in that order — the same four
+     things (and nothing else) the real in-dash GPS shows along its own
+     bottom bar. */
+  .waybill .stats { display: flex; align-items: flex-end; gap: 14px;
+                    margin-top: 6px; overflow: hidden; }
+  .waybill .stat { display: flex; flex-direction: column; min-width: 0; }
+  .waybill .stat .cap { font-size: 9px; color: var(--fog); text-transform: uppercase;
+                         letter-spacing: .06em; white-space: nowrap; }
+  .waybill .stat b { font-size: 15px; font-weight: 700; color: var(--chalk);
+                      white-space: nowrap; line-height: 1.3; }
+  .waybill .stat.speed { margin-left: auto; text-align: right; }
+  .waybill .stat.speed b { font-size: 18px; }
+  .waybill .stat.speed i { font-style: normal; font-size: 11px; color: var(--fog); margin-left: 2px; }
+  .waybill .stat.speed.over b { color: var(--warn); }
+  .limit {
+    display: inline-block; margin-left: 5px; padding: 0 6px; border-radius: 5px;
+    background: var(--chalk); color: #10161c; border: 2px solid var(--warn);
+    font-size: 12px; font-weight: 700; vertical-align: middle;
+  }
+  .limit.hidden { display: none; }
 
   .round {
     width: 46px; height: 46px; border-radius: 50%;
@@ -372,11 +270,6 @@
     <span id="cargo">No job</span>
   </div>
 
-  <div class="damage" id="damage">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 3 7v6c0 5 4 8 9 9 5-1 9-4 9-9V7z"/><path d="M12 8v5M12 16.5v.01"/></svg>
-    <span id="damageVal">0%</span>
-  </div>
-
   <button class="recenter" id="recenter" aria-label="Recentre on truck">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/>
       <path d="M12 3v3M12 18v3M3 12h3M18 12h3"/></svg>
@@ -402,33 +295,6 @@
     </div>
   </div>
 
-  <div class="gauge" id="gear">
-    <svg class="rpm-ring" viewBox="0 0 84 84" aria-hidden="true">
-      <circle class="rpm-track" cx="42" cy="42" r="38"/>
-      <circle class="rpm-arc" id="rpmArc" cx="42" cy="42" r="38"
-        stroke-dasharray="238.76" stroke-dashoffset="238.76"/>
-    </svg>
-    <div style="text-align:center">
-      <div class="cap">GEAR</div>
-      <div class="val" id="gearVal">N</div>
-    </div>
-  </div>
-
-  <div class="gauge" id="speedo">
-    <div style="text-align:center">
-      <div class="val" id="speedVal">0</div>
-      <div class="cap">km/h</div>
-    </div>
-  </div>
-  <div class="limit hidden" id="limit">80</div>
-
-  <div class="gauge" id="fuel">
-    <div style="text-align:center">
-      <div class="val" id="fuelVal">— L</div>
-      <div class="cap" id="fuelCap">of —</div>
-    </div>
-  </div>
-
   <div class="zoom">
     <button id="zoomIn" aria-label="Zoom in">+</button>
     <button id="zoomOut" aria-label="Zoom out">−</button>
@@ -442,10 +308,14 @@
     </button>
     <div style="min-width:0">
       <div class="to" id="dest">No destination set</div>
-      <div class="meta">
-        <b id="remaining">— km</b>
-        <span class="tag real">REAL</span><b id="etaReal">—</b>
-        <span class="tag sim">SIM</span><b id="etaSim">—</b>
+      <div class="stats">
+        <div class="stat"><span class="cap">Clock</span><b id="clockTime">--:--</b></div>
+        <div class="stat"><span class="cap">ETA</span><b id="etaClock">--:--</b></div>
+        <div class="stat"><span class="cap">Dist</span><b id="remaining">—</b></div>
+        <div class="stat speed" id="speedRow">
+          <span class="cap">Speed</span>
+          <span><b id="speedVal">0</b><i id="speedUnit">km/h</i><i class="limit hidden" id="limit">80</i></span>
+        </div>
       </div>
     </div>
     <button class="round" id="openSettings" aria-label="Settings">
@@ -499,8 +369,11 @@
 // Preferences
 // ---------------------------------------------------------------------------
 
+// Tilt defaults on now: the map's whole visual language is built to match
+// ETS2/ATS's own in-dash GPS, which is a forward-tilted trailing view by
+// default — flat/north-up is the opt-out via Settings, not the baseline.
 const prefs = Object.assign(
-  { headingUp: true, autoZoom: true, wakeLock: false, imperial: false, tilt: false },
+  { headingUp: true, autoZoom: true, wakeLock: false, imperial: false, tilt: true },
   readPrefs()
 );
 
@@ -738,8 +611,11 @@ function resize() {
 }
 window.addEventListener('resize', resize);
 
-// The truck sits low on screen so most of the map shows the road ahead.
-const anchorY = () => H * 0.62;
+// The truck sits low on screen so most of the map shows the road ahead —
+// pushed noticeably lower still when tilted, since a forward-tilted GPS
+// view is defined by giving nearly the whole screen to the road ahead
+// rather than centring the truck.
+const anchorY = () => H * ((prefs.tilt && prefs.headingUp) ? 0.82 : 0.62);
 
 /** Game coordinates -> screen pixels, honouring rotation, follow mode, and
  * an optional ground-tilt effect.
@@ -762,7 +638,7 @@ const anchorY = () => H * 0.62;
  * this reduces exactly to the original flat linear mapping — so turning
  * either heading-up or tilt off is provably identical to how the map has
  * always worked. */
-const TILT_STRENGTH = 0.55;
+const TILT_STRENGTH = 1.3;
 
 function project(x, z) {
   const dx = x - view.centre.x;
@@ -842,6 +718,12 @@ function backgroundFill() {
 function drawGrid() {
   // Until real road geometry is compiled, a kilometre grid gives the map
   // honest motion and scale rather than faking roads that are not there.
+  // Never actually gated on that condition until now, so it drew under a
+  // fully-compiled real map on every frame regardless — permanently
+  // showing placeholder graph-paper behind 218k+ real roads instead of
+  // stepping aside once they exist, reported as looking stuck "in build
+  // mode".
+  if (telemetry && telemetry.mapReady) return;
   const step = 1000;
   const reach = Math.max(W, H) * view.metresPerPixel * 1.6;
   const x0 = Math.floor((view.centre.x - reach) / step) * step;
@@ -915,31 +797,94 @@ function drawFerries() {
 // where they cross, instead of whichever happened to draw last. Module-level
 // rather than rebuilt inside drawRoads() every frame — these values never
 // change.
+//
+// Plain grey fill for a road you haven't driven, bright orange/yellow once
+// you have — matching the real ETS2/ATS in-dash GPS's own undiscovered vs.
+// travelled road colouring. The casing (dark edge) doesn't change with
+// visited state; only the fill does, same as the real game just recolouring
+// the road surface rather than its outline.
 const ROAD_STYLE_ORDER = [
-  // Neutral cool grays rather than shades of the accent colour — the
-  // route line is the only thing on the map drawn in --beacon, so it
-  // actually stands out against the road network instead of blending
-  // into a same-hued background the way an all-teal map would.
-  { cls: 2, casingW: 3,   casing: '#161b21', fillW: 1.4, fill: '#242c34' }, // local
-  { cls: 1, casingW: 5,   casing: '#1a2129', fillW: 3,   fill: '#39434e' }, // major
-  { cls: 0, casingW: 7.5, casing: '#1e2730', fillW: 5,   fill: '#8b9aa8' }, // motorway
+  { cls: 2, casingW: 3,   casing: '#1a1a1a', fillW: 1.4, fill: '#454545', vFill: '#d99a2b' }, // local
+  { cls: 1, casingW: 5,   casing: '#1e1e1e', fillW: 3,   fill: '#5a5a5a', vFill: '#e8ac33' }, // major
+  { cls: 0, casingW: 7.5, casing: '#222222', fillW: 5,   fill: '#8a8a8a', vFill: '#ffc93c' }, // motorway
 ];
+
+// Roads have no persistent per-segment ID in the compiled format (they're
+// anonymous point arrays, not addressable) — so "visited" is approximated
+// by a coordinate grid the truck's own position marks off as it drives,
+// not the same mechanism the real game's engine uses internally. Cell size
+// is a tradeoff: too fine and a slightly-off truck position leaves gaps in
+// an otherwise-driven road; too coarse and nearby untouched roads falsely
+// read as travelled.
+const VISITED_CELL_METRES = 300;
+const visitedCells = new Set(readVisitedCells());
+let visitedDirty = false;
+
+function readVisitedCells() {
+  try { return JSON.parse(localStorage.getItem('rigradar.visited') || '[]'); }
+  catch { return []; }
+}
+
+function visitedCellKey(x, z) {
+  return `${Math.floor(x / VISITED_CELL_METRES)},${Math.floor(z / VISITED_CELL_METRES)}`;
+}
+
+function markVisited(x, z) {
+  const key = visitedCellKey(x, z);
+  if (!visitedCells.has(key)) {
+    visitedCells.add(key);
+    visitedDirty = true;
+  }
+}
+
+// Sampling the two endpoints and the midpoint, rather than every point in
+// the segment, keeps this cheap across a viewport that can hold thousands
+// of road segments per frame.
+function isRoadVisited(pts) {
+  const n = pts.length / 2;
+  const mid = Math.floor(n / 2) * 2;
+  const last = (n - 1) * 2;
+  return visitedCells.has(visitedCellKey(pts[0], pts[1])) ||
+    visitedCells.has(visitedCellKey(pts[mid], pts[mid + 1])) ||
+    visitedCells.has(visitedCellKey(pts[last], pts[last + 1]));
+}
+
+setInterval(() => {
+  if (!visitedDirty) return;
+  visitedDirty = false;
+  try { localStorage.setItem('rigradar.visited', JSON.stringify([...visitedCells])); } catch {}
+}, 5000);
 
 function drawRoads() {
   if (!roads.length) return;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   for (const style of ROAD_STYLE_ORDER) {
-    for (const [width, colour] of [[style.casingW, style.casing], [style.fillW, style.fill]]) {
-      ctx.lineWidth = width;
-      ctx.strokeStyle = colour;
-      ctx.beginPath();
-      for (const line of roads) {
-        if (line.cls !== style.cls || line.pts.length < 4) continue;
-        traceFlatPolyline(line.pts);
-      }
-      ctx.stroke();
+    ctx.lineWidth = style.casingW;
+    ctx.strokeStyle = style.casing;
+    ctx.beginPath();
+    for (const line of roads) {
+      if (line.cls !== style.cls || line.pts.length < 4) continue;
+      traceFlatPolyline(line.pts);
     }
+    ctx.stroke();
+
+    ctx.lineWidth = style.fillW;
+    ctx.strokeStyle = style.fill;
+    ctx.beginPath();
+    for (const line of roads) {
+      if (line.cls !== style.cls || line.pts.length < 4 || isRoadVisited(line.pts)) continue;
+      traceFlatPolyline(line.pts);
+    }
+    ctx.stroke();
+
+    ctx.strokeStyle = style.vFill;
+    ctx.beginPath();
+    for (const line of roads) {
+      if (line.cls !== style.cls || line.pts.length < 4 || !isRoadVisited(line.pts)) continue;
+      traceFlatPolyline(line.pts);
+    }
+    ctx.stroke();
   }
 }
 
@@ -949,7 +894,9 @@ function drawRoute() {
   ctx.lineJoin = 'round';
 
   // A dark casing keeps the route legible over any road colour beneath it.
-  for (const [width, colour] of [[13, 'rgba(10,14,20,.85)'], [8, '#2dd4c8']]) {
+  // Bright green for the active route, same role red/green plays in the
+  // real ETS2/ATS in-dash GPS overlaying its own grey/orange road colours.
+  for (const [width, colour] of [[13, 'rgba(10,14,20,.85)'], [8, '#3ddc4a']]) {
     ctx.lineWidth = width;
     ctx.strokeStyle = colour;
     ctx.beginPath();
@@ -1048,31 +995,24 @@ function drawLabels() {
   }
 }
 
-/** Every company gets the same generic cargo-box badge — the compiled
- * search index doesn't carry a finer category (fuel stop vs warehouse vs
- * depot) to distinguish them by, and this isn't reproducing any real
- * brand's mark, just a plain box glyph reading as "company" at a glance,
- * closer to a real GPS app's colour-coded pins than a bare text label. */
+/** Every company gets the same simple, bold marker — the compiled search
+ * index doesn't carry a finer category (fuel stop vs. rest area vs. repair
+ * shop) to pick a bed/pump/wrench icon by by, so a single plain dot-in-ring
+ * reads as "point of interest" at a glance without pretending to
+ * distinguish types the data can't actually tell apart. */
 function drawCompanyBadge(x, y) {
   ctx.beginPath();
-  ctx.roundRect(x - 7, y - 7, 14, 14, 4);
+  ctx.arc(x, y, 6, 0, Math.PI * 2);
   ctx.fillStyle = '#123832';
   ctx.fill();
-  ctx.lineWidth = 1.3;
+  ctx.lineWidth = 1.6;
   ctx.strokeStyle = '#2dd4c8';
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.moveTo(x, y - 3.4);
-  ctx.lineTo(x + 3.4, y - 0.6);
-  ctx.lineTo(x, y + 2.2);
-  ctx.lineTo(x - 3.4, y - 0.6);
-  ctx.closePath();
-  ctx.moveTo(x, y - 3.4);
-  ctx.lineTo(x, y + 2.2);
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = '#7ef0e0';
-  ctx.stroke();
+  ctx.arc(x, y, 2.2, 0, Math.PI * 2);
+  ctx.fillStyle = '#7ef0e0';
+  ctx.fill();
 }
 
 /** Shields read differently by road type in real signage — an interstate
@@ -1224,7 +1164,7 @@ function tick(now) {
       // the perspective compression already buys back the lookahead
       // distance a wider flat view would otherwise need, so tilt pulls the
       // base zoom in closer rather than leaving it unchanged.
-      const target = (prefs.tilt && prefs.headingUp) ? base * 0.5 : base;
+      const target = (prefs.tilt && prefs.headingUp) ? base * 0.22 : base;
       view.metresPerPixel = lerp(view.metresPerPixel, target, Math.min(1, dt * 1.5));
     }
   }
@@ -1302,8 +1242,6 @@ document.getElementById('compass').onclick = () => {
 
 const KM_PER_MILE = 1.609344;
 const FT_PER_METRE = 3.28084;
-const RPM_CIRCUMFERENCE = 2 * Math.PI * 38; // must match the SVG circle's r=38
-
 function distance(metres) {
   const km = metres / 1000;
   if (prefs.imperial) {
@@ -1339,45 +1277,31 @@ function duration(seconds) {
   return h ? `${h}h${String(m).padStart(2, '0')}` : `${m}m`;
 }
 
+// HH:MM within a 24h day, wrapping negative/overflowing minutes the same
+// way real clock arithmetic would (arriving at 25:30 reads as 01:30 the
+// next day, not a broken display).
+function formatClock(totalMinutes) {
+  const m = ((Math.floor(totalMinutes) % 1440) + 1440) % 1440;
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+
 function paint(t) {
+  markVisited(t.truck.x, t.truck.z);
+
   const speed = prefs.imperial ? t.truck.speed / KM_PER_MILE : t.truck.speed;
   $('speedVal').textContent = Math.max(0, Math.round(speed));
-  $('speedo').querySelector('.cap').textContent = prefs.imperial ? 'mph' : 'km/h';
-
-  const gear = t.truck.gear;
-  $('gearVal').textContent = gear > 0 ? gear : gear < 0 ? 'R' : 'N';
-
-  const rpmPct = t.truck.rpmMax > 0 ? Math.min(1, Math.max(0, t.truck.rpm / t.truck.rpmMax)) : 0;
-  const arc = $('rpmArc');
-  arc.style.strokeDasharray = RPM_CIRCUMFERENCE;
-  arc.style.strokeDashoffset = RPM_CIRCUMFERENCE * (1 - rpmPct);
-  arc.style.stroke = rpmPct > 0.9 ? 'var(--warn)' : 'var(--beacon)';
-
-  // Worst single component, not an average — a badly worn engine matters
-  // even if the wheels are fine, and averaging would mask exactly that.
-  const dmg = t.damage || {};
-  const worst = Math.max(dmg.engine || 0, dmg.transmission || 0, dmg.cabin || 0,
-    dmg.chassis || 0, dmg.wheels || 0, dmg.trailer || 0);
-  const damageEl = $('damage');
-  damageEl.classList.toggle('on', worst > 0.005); // hide entirely while pristine
-  damageEl.classList.toggle('warn', worst >= 0.25 && worst < 0.6);
-  damageEl.classList.toggle('critical', worst >= 0.6);
-  $('damageVal').textContent = `${Math.round(worst * 100)}%`;
+  $('speedUnit').textContent = prefs.imperial ? 'mph' : 'km/h';
 
   const lim = t.navigation.speedLimit;
   const limitEl = $('limit');
   if (lim > 0) {
     limitEl.classList.remove('hidden');
     limitEl.textContent = Math.round(prefs.imperial ? lim / KM_PER_MILE : lim);
-    $('speedo').classList.toggle('over', t.truck.speed > lim + 3);
+    $('speedRow').classList.toggle('over', t.truck.speed > lim + 3);
   } else {
     limitEl.classList.add('hidden');
-    $('speedo').classList.remove('over');
+    $('speedRow').classList.remove('over');
   }
-
-  $('fuelVal').textContent = `${Math.round(t.fuel.litres)} L`;
-  $('fuelCap').textContent = `of ${Math.round(t.fuel.capacity)}`;
-  $('fuel').classList.toggle('low', t.fuel.capacity > 0 && t.fuel.litres / t.fuel.capacity < 0.12);
 
   $('wallet').textContent = (t.game === 'ats' ? '$' : '€') + Math.round(t.wallet).toLocaleString();
   $('cargo').textContent = t.job
@@ -1386,8 +1310,18 @@ function paint(t) {
 
   $('dest').textContent = t.job?.destination || 'No destination set';
   $('remaining').textContent = t.navigation.distance >= 0 ? distance(t.navigation.distance) : '—';
-  $('etaSim').textContent = duration(t.navigation.time);
-  $('etaReal').textContent = duration(t.navigation.time / view.timeScale);
+
+  // Both the clock and the ETA are in-game time, not real wall-clock time —
+  // matching the real in-dash GPS, which lives entirely inside the game's
+  // own clock rather than the player's. gameTime is minutes from the SDK's
+  // timeAbs field (RenCloud/scs-sdk-plugin); assumed to cycle with the
+  // game's day/night per that SDK's documented behaviour, not yet
+  // confirmed against real live telemetry — worth double-checking the
+  // very first time this runs against an actual game session.
+  $('clockTime').textContent = formatClock(t.gameTime);
+  $('etaClock').textContent = t.navigation.time >= 0
+    ? formatClock(t.gameTime + t.navigation.time / 60)
+    : '—';
 
 
   updateManoeuvre(t);

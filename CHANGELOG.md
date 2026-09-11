@@ -4,6 +4,81 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.10.0** — A full reskin to match ETS2/ATS's own in-dash GPS specifically
+(not TruckSim GPS, not "Rig Radar's own take" — this one is meant to look
+like the real thing), on explicit spec: grey/orange/green road-and-route
+colours, a stripped-down bottom info bar, and a forward-tilted camera by
+default. Two of the five requirements hit real gaps in the compiled data,
+investigated and disclosed before building anything rather than after:
+
+- **Undiscovered vs. travelled road colouring** — roads have no persistent
+  per-segment ID in the compiled format (251k+ ETS2 segments are anonymous
+  point arrays), so this is approximated: the truck's position marks off
+  300m grid cells into a `Set` persisted in `localStorage`
+  (`rigradar.visited`), and a road segment renders in bright orange/yellow
+  if any of its sampled points fall in an already-visited cell, grey
+  otherwise. This is a coordinate-grid proxy, not the same mechanism the
+  real game's engine uses — verified live by force-marking cells and
+  confirming the affected roads actually recolour.
+- **Distinct fuel/rest/service icons** (bed/pump/wrench) — not feasible
+  without re-running the parser against a raw game dump; every company in
+  the compiled search index is `{id, name, kind, city, x, z}` with no
+  category field at all (checked all 1,844+ ETS2 entries directly, zero
+  variation). Replaced the old cargo-box badge with one simple, bold
+  dot-in-ring marker for every company instead of pretending to
+  distinguish types the data can't tell apart.
+
+Everything else: road casing stays dark/neutral regardless of visited
+state (only the fill recolours, same as the real game just recolouring
+the surface, not the outline); the active route is bright green (`#3ddc4a`)
+over a dark casing, replacing the old teal; the manoeuvre arrow, dashed
+centreline, highway shields, and city/company labels are all unchanged.
+
+**HUD stripped down to match the real GPS exactly**, on explicit request
+after asking rather than assuming — removed the gear gauge, RPM ring,
+fuel gauge, and damage badge entirely from the main view (they're
+dashboard concerns, not GPS concerns; wallet/cargo stayed, since that
+wasn't part of what was asked to strip). The waybill at the bottom now
+carries the four things the real in-dash GPS actually shows: a digital
+clock, ETA, remaining distance, and speed next to the speed limit. Both
+the clock and ETA are **in-game time**, not real wall-clock time — matching
+a GPS that lives entirely inside the game's own clock — derived from
+`gameTime` (the SDK's `timeAbs` field, already parsed but never
+previously displayed anywhere). Flagged in code: this assumes `timeAbs`
+cycles with day/night per the SDK's documented behaviour, which hasn't
+been confirmed yet against real live telemetry specifically for this
+feature — worth double-checking next live session.
+
+One structural side effect worth noting: removing the gear/fuel/damage
+stack also removed the entire `@media (max-height: 480px)` compact-mode
+block that existed specifically to stop that stack colliding with the
+manoeuvre card on short viewports (the exact overlap bugs fixed in
+2.7.9/2.7.10). With that stack gone, the conflict it was written to
+prevent no longer has anything to collide with — verified at 390×420 with
+a forced manoeuvre card: plenty of clearance, no CSS needed to force it.
+
+**Camera defaults to tilted now** (`tilt: true`), not flat — flat/north-up
+is the opt-out via Settings rather than the baseline, since a forward-
+tilted trailing view is what the spec asked to default to.
+
+**2.9.6** — Tilt view zoom, round two: pulled in to just under a third
+(0.32x) of the flat-view distance, per live feedback comparing against
+ATS's own in-game GPS map. Verified live against real telemetry mid-drive
+(a real "Moving Containers" job, real speed-limit overage warning) rather
+than the demo drive.
+
+**2.9.7** — Still too zoomed out, and missing the "tilted forward" feel
+entirely per the next round of live feedback — the previous two passes
+only ever touched the zoom multiplier, never the two things that
+actually define a forward-tilted GPS view: how low the truck sits on
+screen, and how strongly the road ahead compresses toward the horizon.
+Pushed all three together this time: zoom to 0.22x, the truck's screen
+anchor from 62% down to 82% down (flat mode's anchor untouched), and
+TILT_STRENGTH from 0.55 to 1.3 for a much more visible vanishing-point
+curve. A noticeably bigger jump than the previous two rounds, on
+purpose — two small nudges in a row that both came back "still not
+enough" was a sign to stop iterating in tiny steps.
+
 **2.9.5** — The 2.9.3 orphan-cleanup fix had a real gap: it checked
 whether `reader.ps1`'s recorded parent PID still belonged to *any* live
 process, but Windows doesn't update a child's recorded parent PID when
