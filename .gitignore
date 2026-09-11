@@ -1,0 +1,4 @@
+data/
+.claude/
+.server.log
+*.log
