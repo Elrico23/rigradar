@@ -4,6 +4,23 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.8.4** — Regenerated all four icon PNGs (light and dark, both sizes)
+with more safe-zone margin: the outer ring pulled in from 0.34×size to
+~0.28×size, comfortably inside the 0.40×size circle Android/iOS
+guarantee stays unclipped regardless of a launcher's mask shape (circle,
+squircle, teardrop). The previous 0.34 was already technically inside
+that bound, so this wasn't a proven clipping bug — done because a
+reported "wrong icon on the phone home screen" couldn't be reproduced
+from here (no way to add-to-home-screen from this environment), so the
+fix widens the margin defensively rather than asserting a cause I
+couldn't verify.
+
+Important caveat, not a code fix: iOS and Android both cache the icon
+bitmap at the moment a PWA is added to the home screen. If the icon
+already on a phone's home screen still looks wrong after this update,
+the server-side file isn't the problem — remove that home screen icon
+and use "Add to Home Screen" again to pick up the new PNG.
+
 **2.8.3** — Listed the dark icon variants in `manifest.json` too, as
 `purpose: "any"` entries alongside the existing `purpose: "any maskable"`
 navy ones. Worth knowing: the Web App Manifest spec has no
