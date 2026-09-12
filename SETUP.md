@@ -65,6 +65,50 @@ anything else — `netstat -an | findstr :3000` from PowerShell; empty output
 means nothing is listening. This is the single most common cause of a dead
 connection, ahead of firewall or network settings.
 
+### 4. For a real installed app, not just a shortcut (optional)
+
+"Add to Home Screen" above already gives you a home-screen icon today, no
+setup needed — but on Android specifically, that's technically a
+**shortcut** (a bookmark with a custom icon), not a true **installed app**.
+Android's real "Install app" flow needs a secure origin to actually load —
+plain HTTP over a LAN IP doesn't count, even though a normal browser tab
+on that same address works fine. Skip this section if the shortcut is
+good enough; do this if tapping "Install" gave you a blank white screen.
+
+```powershell
+bash tools/generate-cert.sh
+```
+
+(Needs `openssl` — already on your PATH if you have Git for Windows.)
+Restart the server; it'll print an HTTPS section alongside the usual
+addresses, plus one link to install the certificate first:
+
+```
+HTTPS (for a real "Install app" on your phone, not just a shortcut):
+  https://192.168.0.x:3443
+First, install the cert: http://192.168.0.x:3000/rootCA.crt
+```
+
+On your phone (same Wi-Fi):
+
+1. Open the `rootCA.crt` link in your regular browser — Android should
+   offer to install it as a certificate.
+2. Trust it for **VPN and apps** (or "Wi-Fi" if that's the only option
+   offered) — whichever your Android version calls the option that isn't
+   just for browser HTTPS. You'll likely need a screen lock (PIN/pattern/
+   fingerprint) set up first; Android requires one before it'll install
+   any certificate.
+3. Now open the `https://` address from the server's own printed list —
+   your phone's browser will likely still show its own warning once
+   (unfamiliar root CA), which is expected; proceed through it once.
+4. From there, use the browser's **Install app** option. This time it's a
+   true installed PWA — fullscreen, no browser chrome, launches instantly
+   from the home screen.
+
+Re-run `tools/generate-cert.sh` (and re-install the cert on your phone)
+if your PC's LAN IP ever changes and the phone stops connecting — the
+certificate is only valid for the addresses it was generated against.
+
 ---
 
 ## Optional — a PC window too

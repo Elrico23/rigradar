@@ -4,6 +4,228 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.13.0** — Hosting the shell on Netlify, since Android's real "Install
+app" flow turned out to never trust a self-signed CA no matter how the
+local server was configured (confirmed live: 2.11.3's HTTPS setup still
+blank-screened on a clean reinstall) — only a real, publicly-trusted
+certificate fixes it, which means a real domain.
+
+- **`apiBase`/`apiUrl()` config layer** — every `/api/...` fetch and the
+  `/api/stream` EventSource now go through `apiUrl()`, which prefixes
+  `localStorage['rigradar.apiBase']` when set. Lets `public/` be hosted
+  anywhere (Netlify) while still pointing at the user's own PC for
+  telemetry. Settings gained an editable **Telemetry server** field for
+  this; changing it reloads the page since `apiBase` is read once at
+  script load.
+- **CORS added to `server.js`** — `Access-Control-Allow-Origin` reflects
+  the request's `Origin`, plus an `OPTIONS` preflight response, since
+  `/api/route`'s JSON POST body triggers a real cross-origin preflight
+  once the shell and the API are on different origins.
+- **`netlify.toml` (`publish = "public"`) and `.netlifyignore`** —
+  without these, a Netlify deploy run from the repo root would try to
+  ship `data/` (the compiled map binaries) and, worse, `certs/` (the
+  local HTTPS private key) off this machine. Deploy is scoped to just
+  `public/`.
+- Deployed to Netlify (`rigradar-598.netlify.app`) and confirmed on a
+  real Android phone: clean "Install app," no cert warnings — the actual
+  bug 2.11.3 set out to fix and couldn't.
+- Deploys are manual for now (`netlify deploy --prod`); the shell's
+  service worker still means an already-installed phone picks up a new
+  deploy in the background on next open, same as before.
+
+**2.12.0** — Switched reference target from the base ETS2/ATS in-dash GPS
+to TruckSim GPS specifically, on a direct screenshot from the real app —
+confirmed explicitly before touching anything, since it reverses several
+recent, deliberate decisions (2.11.0 stripped the gear/fuel gauges to
+match the base game's minimal GPS; this brings them back to match
+TruckSim GPS's own, fuller dashboard).
+
+- **Gear, speedo+limit, and fuel gauges restored** — pulled the exact
+  pre-2.10.0 markup/CSS/JS back from git history (`git show
+  e3a0703^:public/index.html`) rather than reconstructing from memory,
+  then recoloured the gear ring's arc from teal to amber/orange to match
+  the reference. Damage badge stays removed — not shown in the reference
+  either, and its removal wasn't in question here.
+- **Waybill reverted to distance + REAL/SIM time tags**, replacing the
+  Clock/ETA/Dist/Speed layout from 2.10.0 — matches the reference bottom
+  bar exactly; speed lives back on its own gauge, not in this bar.
+- **Route colour changed from teal to blue** (`#2e8fea`) to match the
+  reference directly. The truck arrow and other teal accents (company
+  markers, city-label dots) are untouched — the reference doesn't clearly
+  show a truck marker to match against, so there's no evidence to change
+  those specifically.
+- **Deliberately did not restore the turn-by-turn card** the reference
+  also shows — that was removed in 2.11.0 on request over a real routing-
+  accuracy problem (Rig Radar's own independently-computed path
+  occasionally disagreeing with the game's actual route), and bringing it
+  back to chase a visual match would silently reintroduce exactly what
+  was asked to be removed. Flagged this explicitly rather than assuming.
+
+Verified live: gauges, colours, and the REAL/SIM bar all confirmed
+against a forced synthetic route (no server restart needed, `index.html`
+serves fresh); also re-checked the narrow/short-viewport case (390×420)
+now that the gauges are back — no overlap, since the manoeuvre card
+that the old compact-mode CSS existed to avoid colliding with is gone
+for good, not just temporarily out of the way.
+
+**2.11.3** — Real Android "Install app" support, not just the
+"Add to Home Screen"/"Create shortcut" flow that already worked. Tapping
+"Install" on a real phone was loading a blank white screen — the same
+address worked fine in a normal browser tab, which narrowed it down:
+Android's actual installed-PWA (WebAPK) wrapper needs a secure origin to
+load content at all, and plain HTTP over a LAN IP has never counted as
+one here, even though ordinary tab navigation doesn't enforce that. Also
+switched the manifest's `display` from `fullscreen` to the far more
+widely-supported `standalone` as a defensive improvement alongside this
+— not confirmed as part of the original bug, but a real difference
+worth having regardless.
+
+Added an optional HTTPS listener (port 3443 by default) alongside the
+unchanged plain-HTTP one, both served by the exact same request handler
+— nothing about the existing HTTP flow changes for anyone who doesn't
+set this up. `tools/generate-cert.sh` creates a self-signed certificate
+(via openssl) valid for localhost and every current non-internal LAN
+IPv4 address; `/rootCA.crt`, served over the plain-HTTP side
+deliberately (a phone that hasn't trusted the cert yet can't reliably
+reach the HTTPS side at all), lets a phone install it as a trusted
+certificate before using the real "Install app" flow on the HTTPS
+address. `certs/` is gitignored — a private key has no business in
+source control. Verified live: both listeners share identical behaviour
+(same live telemetry, same `index.html`/`manifest.json`/`sw.js` content)
+via curl: this environment's own Browser pane has no way to click through
+a self-signed-certificate warning, so that's as far as verification could
+go from here — the actual phone install flow needs a real device to
+confirm end to end.
+
+**2.11.2** — Fixed a visible grey gap between the accumulated
+visited-orange trail and the truck's actual current position. A road
+segment only recolours once all three of its sampled points (start/mid/
+end) land inside an already grid-cell-marked-visited cell — a long
+segment the truck is only partway along wouldn't have its far-end sample
+inside a marked cell yet, even though the truck is plainly on that road
+right now, reading as the trail stopping short of the truck itself.
+`isRoadVisited` now also checks those same sample points against live
+distance to the truck (not just historical cell membership), so the
+segment under/near the truck always shows as travelled immediately
+rather than waiting for enough of it to accumulate on its own. Verified
+live: the trail now connects seamlessly through to the truck's position
+with no gap, right up to the destination on final approach (0.1km out).
+
+**2.11.1** — Removed the on-map chevron marker at each upcoming turn on
+request (no longer wanted, separately from the card removed in 2.11.0) —
+`route.manoeuvres` is still computed and sent by the server, nothing on
+the client reads it now. Also fixed a real, reproducible regression:
+highway shields were showing truncated ("US 1" instead of "US 101") when
+near the route line. First guess was the fixed zoom/compass/link UI
+chrome clipping them — added a reserved-screen-rect check for that
+(genuinely worth having, kept it), but measuring the actual shield
+position live proved it wasn't overlapping any of those. Cropping and
+magnifying the live canvas at the exact spot showed the real cause: the
+route line itself, widened in 2.10.5 to stop visited-orange peeking
+through at bends, was wide enough to now paint over part of any shield
+near the path, since `drawSigns()` ran before `drawRoute()` in the render
+order. Moved the route earlier and signs/labels after it, so both stay
+legible on top the same way they already were on top of plain roads.
+Verified live at the exact shield that was showing the bug: "US 101" now
+renders in full.
+
+**2.11.0** — Removed the turn-by-turn card (distance/direction/"then"
+preview) on request, after live driving found it disagreeing with what
+the game itself was suggesting. Asked for a concrete moment to check
+whether it was a fixable bug first — the answer was no, just remove it —
+so it's gone rather than patched. Worth being clear about why this isn't
+really "fixable" in the usual sense: the card's route comes from Rig
+Radar's own independent Dijkstra pathfinding over the compiled map graph,
+not from the game, since telemetry exposes position and destination but
+never the game's own chosen path — so an occasional disagreement between
+two independently-valid routes isn't a bug to patch so much as a
+structural property of computing turns without access to the ground
+truth to check them against.
+
+Kept the on-map chevron marker at each upcoming turn (`drawManoeuvreArrow`)
+since it wasn't what was reported and reads more as "the path bends here"
+than a specific instruction — but that marker still needs passed
+manoeuvres dropped off the front of `route.manoeuvres` to advance, logic
+that used to live inside the removed card's update function. Kept just
+that pruning in a small standalone function so the on-map marker keeps
+advancing correctly; verified live afterward with no errors and the
+marker still tracking the upcoming bend correctly.
+
+**2.10.6** — Truck marker jitter while driving, reported live: in follow
+mode the camera (`view.centre`) lerps toward the truck's raw telemetry
+position every frame, and the marker was re-projecting that same raw
+position against a centre that's still catching up — a small per-frame
+desync between "where the camera thinks centre is" and "where the marker
+draws itself", worse at a tighter zoom since the same real-world wobble
+covers more screen pixels (which is exactly what 2.10.3's zoom tightening
+would have made more visible). Since `project(view.centre.x, view.centre.z)`
+is always exactly the anchor point by construction, follow mode now pins
+the marker straight to that fixed screen point instead of re-deriving it
+— no lerp lag left to desync from. Verified live: sampled the marker's
+screen position 10 times over a full second while genuinely driving at
+101 km/h — perfectly constant every time, not just smoother.
+
+Also added a horizon-fade in tilt mode ("make the feel more 3D") — roads,
+labels and the route now fade into the background toward the top of the
+screen (atmospheric-perspective haze), a depth cue the perspective
+compression alone doesn't provide on its own, since compression only
+changes where things land on screen, not how solid they look once
+they're compressed near the vanishing point. One gradient fill over
+whatever's already drawn there, not a new object, so it's cheap.
+
+**2.10.5** — Visited-orange road was visibly peeking out from under the
+route line at sharp bends. `route.points` is a server-smoothed curve, not
+the same polyline `drawRoads()` traces for the raw road underneath it, so
+the two paths diverge by a couple of pixels at a tight curve — normally
+too small to notice, but the much tighter tilt-view zoom added in 2.10.3
+(0.15x of the flat span) magnifies that same real-world gap enough to
+show through. Widened the route's casing/fill from 13/8px to 20/13px so
+it fully covers the road it's tracing with margin to spare. Verified live
+at the exact bend that was showing it, no server restart needed.
+
+**2.10.4** — Route line recoloured from the 2.10.0 bright green to
+`#7ef0e0`, the exact same teal as the truck arrow, on request — reads as
+"the line the arrow is following" rather than a second, unrelated
+accent colour. Verified live without a server restart.
+
+**2.10.3** — Two more live-driving reports. "The map is cut off at the
+bottom where it shows the destination" was the tilted anchor's fixed
+82%-of-height landing almost exactly on the waybill card's own top edge
+— measured on the real reported viewport, 637.96px vs. the card's actual
+639px top, close enough that the truck marker and everything behind it
+rendered right under the (now sometimes two-row-tall, since 2.10.1) card
+instead of above it. The anchor is now clamped to the card's actual
+measured top minus a 28px margin, cached once per animation frame rather
+than queried per projected point (which would force a layout reflow per
+point, not per frame). Verified live: 27.9px of clearance instead of a
+1px near-miss.
+
+Tilt zoom pulled in further too — 0.22x down to 0.15x — after "still a
+bit too far out" following yesterday's 0.5x → 0.32x → 0.22x progression.
+Both changes verified live against the same real ATS session without
+touching the server (index.html serves fresh, no restart needed, so the
+active connection stayed up throughout).
+
+**2.10.2** — Found live, the first time a genuine ATS connection followed
+a long ETS2 demo-drive session: the visited-road `Set` had no game
+scoping at all, so 42 cells accumulated from ETS2 driving were still
+sitting there the moment ATS connected, free to falsely mark ATS roads
+"visited" purely by numeric coincidence — ATS and ETS2 are independent
+local coordinate systems, not one shared world, so the same raw (x, z)
+can be a real place in both at once. Every cell key is now prefixed with
+the game ("ats:12,-4" vs. "ets2:12,-4"); old unprefixed keys from before
+this fix are harmlessly orphaned in `localStorage` rather than migrated,
+since they'll simply never match a lookup again. Verified live: the
+false-positive road disappeared immediately after the fix (no server
+restart needed, `index.html` serves fresh) while the connection stayed
+live throughout.
+
+Also confirmed against this same live session, resolving 2.10.0's
+flagged uncertainty: the in-game clock and ETA (`gameTime`/`timeAbs`) do
+track real in-game time-of-day correctly — checked the displayed 10:14
+clock and 12:02 ETA against the raw telemetry by hand, both matched
+exactly.
+
 **2.10.1** — Fixed the new bottom bar overlapping itself at narrower
 phone widths (~314px) — a real gap in 2.10.0's own testing, which only
 checked 390px+ viewports. `.stats` laid out its four labelled values with

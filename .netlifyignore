@@ -5,6 +5,3 @@ data/
 desktop/node_modules/
 desktop/dist/
 certs/
-
-# Local Netlify folder
-.netlify

@@ -14,6 +14,7 @@
  */
 
 const http = require('node:http');
+const https = require('node:https');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
@@ -366,8 +367,45 @@ async function serveStatic(res, urlPath) {
   }
 }
 
-const server = http.createServer(async (req, res) => {
+// Shared by both the plain-HTTP server (unchanged, still the default) and
+// the optional HTTPS one below — a phone's real "Install app" flow (as
+// opposed to a plain browser tab, or the simpler "Create shortcut") needs
+// a secure origin to load at all once installed, which plain HTTP over a
+// LAN IP never counts as.
+async function requestHandler(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
+
+  // Lets a shell hosted elsewhere (e.g. Netlify) call this PC's API. There's
+  // no auth or cookie state to leak here, so a wide-open origin is fine —
+  // reflecting the request's own origin (rather than '*') so it still works
+  // when the browser requires credentials mode for the EventSource/fetch.
+  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.setHeader('Vary', 'Origin');
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, {
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Max-Age': '86400',
+    });
+    return res.end();
+  }
+
+  // Served over plain HTTP deliberately, not just HTTPS — a phone that
+  // hasn't trusted this self-signed cert yet can't reach the HTTPS side
+  // reliably at all, so the one file it needs to fetch first to start
+  // trusting it has to come from the side that already works everywhere.
+  // application/x-x509-ca-cert is what gets Android's browser to offer
+  // "install this certificate" instead of just downloading an opaque file.
+  if (url.pathname === '/rootCA.crt') {
+    try {
+      const cert = fs.readFileSync(path.join(CERT_DIR, 'server.crt'));
+      res.writeHead(200, { 'content-type': 'application/x-x509-ca-cert' });
+      return res.end(cert);
+    } catch {
+      res.writeHead(404);
+      return res.end('No certificate generated yet.');
+    }
+  }
 
   if (url.pathname === '/api/stream') {
     res.writeHead(200, {
@@ -388,7 +426,7 @@ const server = http.createServer(async (req, res) => {
 
   if (url.pathname === '/api/status') {
     return json(res, 200, {
-      version: '2.10.1',
+      version: '2.13.0',
       source: state.source,
       connected: state.connected,
       game: state.game,
@@ -480,7 +518,26 @@ const server = http.createServer(async (req, res) => {
   }
 
   return serveStatic(res, url.pathname);
-});
+}
+
+const server = http.createServer(requestHandler);
+
+// Optional HTTPS listener, only started if certs/server.{key,crt} exist —
+// generated once with tools/generate-cert.sh (or by hand with openssl),
+// not something server.js creates itself. A self-signed cert someone still
+// has to install/trust on their phone isn't something to spring on a
+// fresh install with no HTTP fallback, so plain HTTP on PORT keeps working
+// exactly as before regardless of whether HTTPS is set up.
+let httpsServer = null;
+const CERT_DIR = path.join(ROOT, 'certs');
+const HTTPS_PORT = Number(args[args.indexOf('--https-port') + 1]) || 3443;
+try {
+  const key = fs.readFileSync(path.join(CERT_DIR, 'server.key'));
+  const cert = fs.readFileSync(path.join(CERT_DIR, 'server.crt'));
+  httpsServer = https.createServer({ key, cert }, requestHandler);
+} catch {
+  // No cert/key on disk — HTTPS just isn't offered this run.
+}
 
 // ---------------------------------------------------------------------------
 // Boot
@@ -527,7 +584,7 @@ function localAddresses() {
     // With --port 0 the OS assigns the real port, so read it back rather
     // than printing the literal 0 that was passed in.
     const boundPort = server.address().port;
-    console.log('\n  Rig Radar 2.10.1\n');
+    console.log('\n  Rig Radar 2.13.0\n');
     for (const addr of localAddresses()) {
       console.log(`  Open on your phone:  http://${addr}:${boundPort}`);
     }
@@ -535,6 +592,18 @@ function localAddresses() {
     if (!parseBlock) {
       console.log('  Telemetry parser missing — showing the demo drive.');
       console.log('  Copy lib/telemetry.js and reader.ps1 from your Rig Radar v1 folder.\n');
+    }
+    if (httpsServer) {
+      httpsServer.listen(HTTPS_PORT, '0.0.0.0', () => {
+        console.log('  HTTPS (for a real "Install app" on your phone, not just a shortcut):');
+        for (const addr of localAddresses()) {
+          console.log(`    https://${addr}:${HTTPS_PORT}`);
+        }
+        console.log(`  First, install the cert: http://${localAddresses()[0] || 'localhost'}:${boundPort}/rootCA.crt\n`);
+      });
+    } else {
+      console.log('  No certs/server.{key,crt} found — HTTPS not started.');
+      console.log('  Run tools/generate-cert.sh to enable a real phone "Install app".\n');
     }
   });
 })();

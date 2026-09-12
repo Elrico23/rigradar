@@ -3,7 +3,7 @@
   "short_name": "Rig Radar",
   "description": "Live map and instruments for Euro Truck Simulator 2 and American Truck Simulator.",
   "start_url": ".",
-  "display": "fullscreen",
+  "display": "standalone",
   "orientation": "any",
   "background_color": "#0a0e14",
   "theme_color": "#0a0e14",

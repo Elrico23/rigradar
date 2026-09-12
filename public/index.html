@@ -92,37 +92,50 @@
   .recenter.on { opacity: 1; transform: none; pointer-events: auto; }
   .recenter svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; }
 
-  /* ---- next manoeuvre ------------------------------------------------ */
+  /* ---- gauges ---------------------------------------------------------
+     Restored from the pre-2.10.0 design (gear/speed/fuel), on request to
+     match TruckSim GPS's own look rather than the base game's in-dash
+     GPS this session had been matching until now — that reference shows
+     these gauges; the base-game reskin that removed them was working
+     from a different, narrower reference. */
 
-  .manoeuvre {
-    position: absolute; top: calc(64px + var(--safe-t)); left: 12px;
-    display: flex; align-items: center; gap: 16px;
-    padding: 12px 22px 12px 18px; border-radius: 14px;
-    background: rgba(10,14,20,.88);
+  .gauge {
+    position: absolute;
+    display: grid; place-items: center;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 35%, #1a222c, #0a0e14 72%);
     border: 1px solid var(--kerb);
-    border-left: 3px solid var(--beacon);
-    backdrop-filter: blur(12px);
-    opacity: 0; transform: translateY(-6px);
-    transition: opacity .2s ease, transform .2s ease, top .15s ease;
   }
-  .manoeuvre.on { opacity: 1; transform: none; }
-  .manoeuvre .dist { font-size: 40px; font-weight: 700; line-height: .9; }
-  .manoeuvre .dist i { font-size: 18px; font-style: normal; color: var(--fog); margin-left: 3px; }
-  .manoeuvre .road { font-size: 13px; color: var(--fog); margin-top: 4px; }
-  .manoeuvre .then { font-size: 11px; color: var(--fog); opacity: .7; margin-top: 3px; display: none; }
-  .manoeuvre .then.on { display: block; }
-  .manoeuvre svg { width: 34px; height: 34px; fill: none; stroke: var(--beacon); stroke-width: 2.4;
-                   stroke-linecap: round; stroke-linejoin: round; }
-  .manoeuvre.arrived { border-left-color: var(--go); }
-  .manoeuvre.arrived svg,
-  .manoeuvre.arrived .dist,
-  .manoeuvre.arrived .then { display: none; }
-  /* "Arrived" has no descenders, so a normal line-height leaves the empty
-     descender space sitting entirely below the glyphs, pushing them above
-     centre in the pill — line-height 1 plus a small top nudge balances the
-     two even gaps (verified 39px/39px top vs bottom against this font). */
-  .manoeuvre.arrived .road { color: var(--go); font-size: 21px; font-weight: 700; margin-top: 0;
-                              line-height: 1; padding-top: 4px; }
+
+  #gear { left: 14px; bottom: 232px; width: 84px; height: 84px; }
+  .rpm-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+  .rpm-track { fill: none; stroke: var(--kerb); stroke-width: 5; }
+  /* Amber/orange, matching TruckSim GPS's own gear ring, not the app's
+     teal accent — the one gauge that intentionally doesn't use --beacon. */
+  .rpm-arc { fill: none; stroke: #f5a623; stroke-width: 5; stroke-linecap: round;
+    transition: stroke-dashoffset .15s linear, stroke .15s linear; }
+  #gear .cap { font-size: 10px; color: var(--fog); letter-spacing: .16em; }
+  #gear .val { font-size: 34px; font-weight: 700; line-height: 1; }
+
+  #speedo { left: 14px; bottom: 132px; width: 96px; height: 96px; }
+  #speedo .val { font-size: 36px; font-weight: 700; line-height: 1; }
+  #speedo .cap { font-size: 11px; color: var(--fog); }
+
+  .limit {
+    position: absolute; left: 92px; bottom: 200px;
+    width: 44px; height: 44px; border-radius: 50%;
+    background: var(--chalk); color: #10161c;
+    border: 5px solid var(--warn);
+    display: grid; place-items: center;
+    font-size: 17px; font-weight: 700;
+  }
+  .limit.hidden { display: none; }
+  #speedo.over .val { color: var(--warn); }
+
+  #fuel { right: 14px; bottom: 132px; width: 96px; height: 96px; }
+  #fuel .val { font-size: 21px; font-weight: 700; line-height: 1.1; }
+  #fuel .cap { font-size: 11px; color: var(--fog); }
+  #fuel.low .val { color: var(--warn); }
 
   .zoom {
     position: absolute; right: 14px; bottom: 256px;
@@ -150,34 +163,16 @@
     border: 1px solid var(--kerb);
     backdrop-filter: blur(16px);
   }
-  .waybill .to { font-size: 15px; font-weight: 600; color: var(--signal);
+  .waybill .to { font-size: 19px; font-weight: 600; color: var(--signal);
                  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  /* Clock / ETA / distance / speed+limit, in that order — the same four
-     things (and nothing else) the real in-dash GPS shows along its own
-     bottom bar. */
-  /* flex-wrap rather than a fixed one-line layout: at 314px-class phone
-     widths, four labelled stats plus the two round buttons don't fit on
-     one line without shrinking each stat narrower than its own text,
-     which doesn't truncate (nowrap) — it silently overlaps the next stat
-     instead. Wrapping to a second line when needed is a much safer
-     failure mode than overlapping, illegible text. */
-  .waybill .stats { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 16px;
-                    margin-top: 6px; }
-  .waybill .stat { display: flex; flex-direction: column; min-width: 44px; }
-  .waybill .stat .cap { font-size: 9px; color: var(--fog); text-transform: uppercase;
-                         letter-spacing: .06em; white-space: nowrap; }
-  .waybill .stat b { font-size: 15px; font-weight: 700; color: var(--chalk);
-                      white-space: nowrap; line-height: 1.3; }
-  .waybill .stat.speed { margin-left: auto; text-align: right; }
-  .waybill .stat.speed b { font-size: 18px; }
-  .waybill .stat.speed i { font-style: normal; font-size: 11px; color: var(--fog); margin-left: 2px; }
-  .waybill .stat.speed.over b { color: var(--warn); }
-  .limit {
-    display: inline-block; margin-left: 5px; padding: 0 6px; border-radius: 5px;
-    background: var(--chalk); color: #10161c; border: 2px solid var(--warn);
-    font-size: 12px; font-weight: 700; vertical-align: middle;
-  }
-  .limit.hidden { display: none; }
+  .waybill .meta { display: flex; align-items: center; gap: 5px;
+                   margin-top: 5px; font-size: 13px; color: var(--fog);
+                   white-space: nowrap; overflow: hidden; }
+  .waybill .meta b { color: var(--chalk); font-weight: 600; }
+  .tag { padding: 1px 5px; border-radius: 4px; font-size: 10px; font-weight: 700;
+         letter-spacing: .02em; }
+  .tag.real { background: rgba(111,191,115,.16); color: var(--go); }
+  .tag.sim  { background: rgba(45,212,200,.16); color: var(--beacon); }
 
   .round {
     width: 46px; height: 46px; border-radius: 50%;
@@ -289,15 +284,30 @@
     </svg>
   </button>
 
-  <div class="manoeuvre" id="manoeuvre">
-    <svg viewBox="0 0 32 32" aria-hidden="true">
-      <path id="turnArm"/>
-      <path id="turnHead"/>
+  <div class="gauge" id="gear">
+    <svg class="rpm-ring" viewBox="0 0 84 84" aria-hidden="true">
+      <circle class="rpm-track" cx="42" cy="42" r="38"/>
+      <circle class="rpm-arc" id="rpmArc" cx="42" cy="42" r="38"
+        stroke-dasharray="238.76" stroke-dashoffset="238.76"/>
     </svg>
-    <div>
-      <div class="dist"><span id="turnDist">—</span><i id="turnUnit">km</i></div>
-      <div class="road" id="turnRoad">Waiting for a route</div>
-      <div class="then" id="thenPreview"></div>
+    <div style="text-align:center">
+      <div class="cap">GEAR</div>
+      <div class="val" id="gearVal">N</div>
+    </div>
+  </div>
+
+  <div class="gauge" id="speedo">
+    <div style="text-align:center">
+      <div class="val" id="speedVal">0</div>
+      <div class="cap" id="speedUnit">km/h</div>
+    </div>
+  </div>
+  <div class="limit hidden" id="limit">80</div>
+
+  <div class="gauge" id="fuel">
+    <div style="text-align:center">
+      <div class="val" id="fuelVal">— L</div>
+      <div class="cap" id="fuelCap">of —</div>
     </div>
   </div>
 
@@ -314,14 +324,10 @@
     </button>
     <div style="min-width:0">
       <div class="to" id="dest">No destination set</div>
-      <div class="stats">
-        <div class="stat"><span class="cap">Clock</span><b id="clockTime">--:--</b></div>
-        <div class="stat"><span class="cap">ETA</span><b id="etaClock">--:--</b></div>
-        <div class="stat"><span class="cap">Dist</span><b id="remaining">—</b></div>
-        <div class="stat speed" id="speedRow">
-          <span class="cap">Speed</span>
-          <span><b id="speedVal">0</b><i id="speedUnit">km/h</i><i class="limit hidden" id="limit">80</i></span>
-        </div>
+      <div class="meta">
+        <b id="remaining">— km</b>
+        <span class="tag real">REAL</span><b id="etaReal">—</b>
+        <span class="tag sim">SIM</span><b id="etaSim">—</b>
       </div>
     </div>
     <button class="round" id="openSettings" aria-label="Settings">
@@ -361,7 +367,12 @@
     <div class="row"><span>Tilted view (needs Heading up)</span>
       <button class="switch" id="optTilt" role="switch" aria-checked="false"></button></div>
     <div class="row"><span>Game time scale</span><b id="scaleVal">15×</b></div>
-    <div class="row"><span>Server</span><b id="serverVal">—</b></div>
+    <div class="row"><span>This page served from</span><b id="serverVal">—</b></div>
+    <div class="row" style="flex-direction:column; align-items:stretch; gap:6px;">
+      <span>Telemetry server (only if this page isn't your PC)</span>
+      <input class="field" id="apiBaseInput" style="margin-bottom:0"
+        placeholder="e.g. https://192.168.0.x:3443 — leave blank otherwise">
+    </div>
     <div class="row"><span>Version</span><b id="versionVal">—</b></div>
     <div class="row"><span>Close</span><button class="round" data-close aria-label="Close">
       <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
@@ -370,6 +381,22 @@
 
 <script>
 'use strict';
+
+// ---------------------------------------------------------------------------
+// API base — same-origin by default (running straight off the local
+// server, as this app always has), but overridable when this page itself
+// is hosted somewhere else (e.g. Netlify, for a real trusted-HTTPS
+// install) while the live telemetry still only ever comes from your own
+// PC on your LAN. Persisted so it survives a reload; the Settings sheet
+// exposes it as an editable field.
+// ---------------------------------------------------------------------------
+
+function readApiBase() {
+  try { return localStorage.getItem('rigradar.apiBase') || ''; }
+  catch { return ''; }
+}
+let apiBase = readApiBase().replace(/\/$/, '');
+function apiUrl(path) { return apiBase + path; }
 
 // ---------------------------------------------------------------------------
 // Preferences
@@ -454,7 +481,7 @@ async function maybeAutoRoute(t) {
 
   autoRouteInFlight = true;
   try {
-    const res = await fetch(`/api/autoroute?game=${t.game}`);
+    const res = await fetch(apiUrl(`/api/autoroute?game=${t.game}`));
     if (res.ok) {
       route = await res.json();
       routeSource = { mode: 'auto' };
@@ -525,7 +552,7 @@ async function checkRouteDeviation(t) {
   rerouteInFlight = true;
   try {
     if (routeSource.mode === 'auto') {
-      const res = await fetch(`/api/autoroute?game=${t.game}`);
+      const res = await fetch(apiUrl(`/api/autoroute?game=${t.game}`));
       route = res.ok ? await res.json() : null;
       if (!route) {
         // Let maybeAutoRoute's normal retry path pick this back up instead
@@ -574,7 +601,7 @@ async function refreshGeo() {
   geoInFlight = true;
   lastGeoCentre = { x: view.centre.x, z: view.centre.z };
   try {
-    const res = await fetch(`/api/geo?${params}`);
+    const res = await fetch(apiUrl(`/api/geo?${params}`));
     if (res.ok) {
       const body = await res.json();
       roads = body.roads;
@@ -621,7 +648,54 @@ window.addEventListener('resize', resize);
 // pushed noticeably lower still when tilted, since a forward-tilted GPS
 // view is defined by giving nearly the whole screen to the road ahead
 // rather than centring the truck.
-const anchorY = () => H * ((prefs.tilt && prefs.headingUp) ? 0.82 : 0.62);
+//
+// The tilted anchor is clamped to stay above the waybill card rather than
+// using a bare 0.82*H, because the card's own height isn't fixed — it
+// wraps to two rows on a narrow phone (2.10.1) and is otherwise free to
+// change. A hardcoded 82% happened to land almost exactly on the card's
+// top edge at a real reported viewport (637.96 vs. the card's actual
+// 639px top), which put the truck marker and everything behind it right
+// under the card — reading as the map being "cut off" at the bottom.
+// waybillTopCache is refreshed once per animation frame (tick()), not
+// here, since anchorY() runs on every projected point and querying layout
+// that often would force a reflow per point rather than per frame.
+let waybillTopCache = null;
+
+function refreshWaybillTopCache() {
+  const wb = document.querySelector('.waybill');
+  waybillTopCache = wb ? wb.getBoundingClientRect().top : null;
+}
+
+// Same idea as waybillTopCache, generalised: fixed HTML chrome the canvas
+// otherwise has no way to know sits on top of it. Refreshed once per frame
+// (tick()), not per shield — recenter's own rect is only included while
+// it's actually shown (.on), since it stays in normal layout (just
+// opacity: 0) while hidden and would otherwise reserve a phantom rectangle
+// nothing is actually occupying.
+let reservedUIRects = [];
+
+function refreshReservedUIRects() {
+  const recenter = document.getElementById('recenter');
+  const els = [
+    recenter?.classList.contains('on') ? recenter : null,
+    document.querySelector('.compass'),
+    document.querySelector('.zoom'),
+    document.getElementById('link'),
+  ];
+  reservedUIRects = els.filter(Boolean).map((el) => el.getBoundingClientRect());
+}
+
+function overlapsReservedUI(x0, y0, x1, y1) {
+  return reservedUIRects.some((r) => x0 < r.right && x1 > r.left && y0 < r.bottom && y1 > r.top);
+}
+
+const anchorY = () => {
+  if (prefs.tilt && prefs.headingUp) {
+    const uncapped = H * 0.82;
+    return waybillTopCache != null ? Math.min(uncapped, waybillTopCache - 28) : uncapped;
+  }
+  return H * 0.62;
+};
 
 /** Game coordinates -> screen pixels, honouring rotation, follow mode, and
  * an optional ground-tilt effect.
@@ -822,6 +896,15 @@ const ROAD_STYLE_ORDER = [
 // is a tradeoff: too fine and a slightly-off truck position leaves gaps in
 // an otherwise-driven road; too coarse and nearby untouched roads falsely
 // read as travelled.
+//
+// Every key is prefixed with the game ("ats:" / "ets2:") — ATS and ETS2
+// are independent local coordinate systems, not one shared world, so the
+// same raw (x, z) can be a real place in both games at once. Caught this
+// live: 42 cells accumulated from ETS2 demo driving were still sitting in
+// this same Set the first time a genuine ATS connection came up, with
+// nothing stopping them from falsely marking ATS roads "visited" purely
+// by numeric coincidence. Without the prefix, one game's driving history
+// bleeds into the other's map every time.
 const VISITED_CELL_METRES = 300;
 const visitedCells = new Set(readVisitedCells());
 let visitedDirty = false;
@@ -831,12 +914,12 @@ function readVisitedCells() {
   catch { return []; }
 }
 
-function visitedCellKey(x, z) {
-  return `${Math.floor(x / VISITED_CELL_METRES)},${Math.floor(z / VISITED_CELL_METRES)}`;
+function visitedCellKey(game, x, z) {
+  return `${game}:${Math.floor(x / VISITED_CELL_METRES)},${Math.floor(z / VISITED_CELL_METRES)}`;
 }
 
-function markVisited(x, z) {
-  const key = visitedCellKey(x, z);
+function markVisited(game, x, z) {
+  const key = visitedCellKey(game, x, z);
   if (!visitedCells.has(key)) {
     visitedCells.add(key);
     visitedDirty = true;
@@ -847,12 +930,30 @@ function markVisited(x, z) {
 // the segment, keeps this cheap across a viewport that can hold thousands
 // of road segments per frame.
 function isRoadVisited(pts) {
+  const game = telemetry?.game || 'ets2';
   const n = pts.length / 2;
   const mid = Math.floor(n / 2) * 2;
   const last = (n - 1) * 2;
-  return visitedCells.has(visitedCellKey(pts[0], pts[1])) ||
-    visitedCells.has(visitedCellKey(pts[mid], pts[mid + 1])) ||
-    visitedCells.has(visitedCellKey(pts[last], pts[last + 1]));
+  const sampleX = [pts[0], pts[mid], pts[last]];
+  const sampleZ = [pts[1], pts[mid + 1], pts[last + 1]];
+  for (let i = 0; i < 3; i++) {
+    if (visitedCells.has(visitedCellKey(game, sampleX[i], sampleZ[i]))) return true;
+  }
+  // A long segment the truck is only partway along won't have all three
+  // sample points inside an already-marked cell yet, even though the
+  // truck is plainly driving on it right now — that read as a visible gap
+  // between the accumulated yellow trail and the truck's actual position,
+  // on the very road it's on. Checking the same sample points against live
+  // distance to the truck (not just historical cell membership) closes
+  // that gap immediately rather than waiting for enough of the segment to
+  // accumulate into marked cells on its own.
+  if (telemetry?.truck && telemetry.game === game) {
+    const tx = telemetry.truck.x, tz = telemetry.truck.z;
+    for (let i = 0; i < 3; i++) {
+      if (Math.hypot(sampleX[i] - tx, sampleZ[i] - tz) < VISITED_CELL_METRES) return true;
+    }
+  }
+  return false;
 }
 
 setInterval(() => {
@@ -900,9 +1001,18 @@ function drawRoute() {
   ctx.lineJoin = 'round';
 
   // A dark casing keeps the route legible over any road colour beneath it.
-  // Bright green for the active route, same role red/green plays in the
-  // real ETS2/ATS in-dash GPS overlaying its own grey/orange road colours.
-  for (const [width, colour] of [[13, 'rgba(10,14,20,.85)'], [8, '#3ddc4a']]) {
+  // Blue, matching TruckSim GPS's own route colour (a direct reference
+  // screenshot), not the app's teal accent used elsewhere on the map.
+  // Wider than the road it overlays (20/13 vs. the widest road style's own
+  // 7.5px casing) on purpose: route.points is a server-smoothed curve, not
+  // the same polyline drawRoads() traces for the raw road underneath it,
+  // so at a sharp bend the two paths diverge by a couple of pixels — barely
+  // visible at a normal zoom, but the much tighter tilt-view zoom (0.15x
+  // of the flat span, since 2.10.3) magnifies that same real-world gap
+  // enough to show a sliver of the visited-orange road peeking out on the
+  // inside of the curve. More margin here is cheaper than perfectly
+  // reconciling two independently-computed paths.
+  for (const [width, colour] of [[20, 'rgba(10,14,20,.85)'], [13, '#2e8fea']]) {
     ctx.lineWidth = width;
     ctx.strokeStyle = colour;
     ctx.beginPath();
@@ -1045,11 +1155,21 @@ function drawSigns() {
     const [x, y] = project(s.x, s.z);
     const style = shieldStyle(s.label);
     const w = ctx.measureText(s.label).width + 10;
+    const x0 = x - w / 2, y0 = y - 9, x1 = x + w / 2, y1 = y + 9;
+    // The shield is drawn on the canvas, which has no idea the zoom
+    // buttons/compass/link pill sit on top of it as opaque HTML — a shield
+    // that happens to project underneath one gets visually clipped by it,
+    // reading as a badly-truncated route number ("US 1" instead of
+    // "US 101") rather than a rendering bug in the shield itself. Skipping
+    // any shield whose box overlaps one of those reserved screen rects
+    // (cached once per frame in tick(), not queried per shield) avoids
+    // that without needing the canvas to know about DOM layout at all.
+    if (overlapsReservedUI(x0, y0, x1, y1)) continue;
     ctx.fillStyle = style.bg;
     ctx.strokeStyle = style.border;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.roundRect(x - w / 2, y - 9, w, 18, 4);
+    ctx.roundRect(x0, y0, w, 18, 4);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = style.fg;
@@ -1057,42 +1177,21 @@ function drawSigns() {
   }
 }
 
-/** A rotated arrow at the upcoming turn itself, on the road, pointing in
- * the direction you'll be travelling after it — same idea as drawTruck's
- * rotation logic, cross-checked against it rather than derived fresh, since
- * getting a heading-up rotation subtly wrong is an easy mistake to make. */
-function drawManoeuvreArrow() {
-  if (!route || !route.manoeuvres?.length) return;
-  const m = route.manoeuvres[0];
-  const [x, y] = project(m.x, m.z);
-  const mapRot = prefs.headingUp ? -view.bearing * Math.PI / 180 : 0;
-  const rot = (m.heading * Math.PI) / 180 + mapRot;
-
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(rot);
-
-  // A chevron rather than a solid kite shape — the notch at the back reads
-  // as a directional arrowhead at a glance, the way a turn marker should,
-  // rather than a plain blob sitting on the line.
-  ctx.beginPath();
-  ctx.moveTo(0, -16);
-  ctx.lineTo(11, 9);
-  ctx.lineTo(0, 2);
-  ctx.lineTo(-11, 9);
-  ctx.closePath();
-
-  ctx.fillStyle = '#7ef0e0';
-  ctx.fill();
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = '#10161c';
-  ctx.stroke();
-  ctx.restore();
-}
-
 function drawTruck() {
   if (!telemetry) return;
-  const [px, py] = project(telemetry.truck.x, telemetry.truck.z);
+  // In follow mode the camera (view.centre) is itself lerping toward this
+  // exact same telemetry position every frame — re-projecting the raw
+  // value against a centre that's still catching up produces a small but
+  // real per-frame desync between "where the camera thinks centre is" and
+  // "where the marker draws itself", which reads as jitter, worse at a
+  // tighter zoom since the same real-world wobble covers more screen
+  // pixels. Since project(view.centre.x, view.centre.z) is always exactly
+  // the anchor point by construction, following mode can skip the
+  // round-trip entirely and pin the marker there directly — no lerp lag
+  // to desync from. Only re-projects the raw position when the camera
+  // isn't following (panned away manually), where there's no fixed anchor
+  // to pin to in the first place.
+  const [px, py] = view.followTruck ? [W / 2, anchorY()] : project(telemetry.truck.x, telemetry.truck.z);
   const rot = ((prefs.headingUp ? 0 : telemetry.truck.heading) * Math.PI) / 180;
 
   ctx.save();
@@ -1119,6 +1218,23 @@ function drawTruck() {
   ctx.restore();
 }
 
+// Atmospheric-perspective haze toward the horizon — real depth cue a flat
+// top-down map has no reason to have, but a forward-tilted one reads as
+// noticeably flatter without it, since the perspective compression alone
+// only changes where things land on screen, not how solid they look once
+// they're compressed near the vanishing point. Purely a fade of whatever
+// was already drawn there (roads, labels, the route), not its own object,
+// so it costs one gradient fill rather than touching every draw call.
+function drawHorizonFade() {
+  if (!prefs.tilt || !prefs.headingUp) return;
+  const fadeBottom = anchorY() * 0.5;
+  const grad = ctx.createLinearGradient(0, 0, 0, fadeBottom);
+  grad.addColorStop(0, 'rgba(8,11,15,.95)');
+  grad.addColorStop(1, 'rgba(8,11,15,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, fadeBottom);
+}
+
 function render() {
   ctx.fillStyle = backgroundFill();
   ctx.fillRect(0, 0, W, H);
@@ -1127,10 +1243,16 @@ function render() {
   drawEmptyState();
   drawRoads();
   drawFerries();
+  // Signs and labels draw after the route now, not before — the route's
+  // casing was widened (2.10.5, to stop visited-orange road peeking
+  // through at bends) enough that it now covers part of any shield or
+  // label sitting close to the path it's tracing, if drawn first. Both
+  // are meant to stay legible on top of the route, the way they already
+  // do on top of plain roads.
+  drawRoute();
   drawSigns();
   drawLabels();
-  drawRoute();
-  drawManoeuvreArrow();
+  drawHorizonFade();
   drawTruck();
 }
 
@@ -1156,6 +1278,8 @@ let lastFrame = performance.now();
 function tick(now) {
   const dt = Math.min((now - lastFrame) / 1000, 0.1);
   lastFrame = now;
+  refreshWaybillTopCache();
+  refreshReservedUIRects();
 
   if (telemetry) {
     view.bearing = (lerpAngle(view.bearing, telemetry.truck.heading, Math.min(1, dt * 4)) + 360) % 360;
@@ -1170,7 +1294,7 @@ function tick(now) {
       // the perspective compression already buys back the lookahead
       // distance a wider flat view would otherwise need, so tilt pulls the
       // base zoom in closer rather than leaving it unchanged.
-      const target = (prefs.tilt && prefs.headingUp) ? base * 0.22 : base;
+      const target = (prefs.tilt && prefs.headingUp) ? base * 0.15 : base;
       view.metresPerPixel = lerp(view.metresPerPixel, target, Math.min(1, dt * 1.5));
     }
   }
@@ -1247,7 +1371,7 @@ document.getElementById('compass').onclick = () => {
 // ---------------------------------------------------------------------------
 
 const KM_PER_MILE = 1.609344;
-const FT_PER_METRE = 3.28084;
+const RPM_CIRCUMFERENCE = 2 * Math.PI * 38; // must match the SVG circle's r=38
 function distance(metres) {
   const km = metres / 1000;
   if (prefs.imperial) {
@@ -1255,24 +1379,6 @@ function distance(metres) {
     return mi < 10 ? `${mi.toFixed(1)} mi` : `${Math.round(mi)} mi`;
   }
   return km < 10 ? `${km.toFixed(1)} km` : `${Math.round(km)} km`;
-}
-
-// Same near/far split as distance() above, but returned as separate
-// value/unit parts (for the manoeuvre card's two-span layout) and with a
-// near-range unit of its own (feet, not metres, under imperial) rather than
-// switching units only past the 1000 threshold — a close turn is exactly
-// the number a driver glances at most, so it can't be the one distance in
-// the app that stays metric regardless of the imperial setting.
-function turnDistanceParts(metres) {
-  if (prefs.imperial) {
-    const ft = metres * FT_PER_METRE;
-    if (ft < 1000) return { value: String(Math.round(ft)), unit: 'ft' };
-    const mi = metres / 1000 / KM_PER_MILE;
-    return { value: mi < 10 ? mi.toFixed(1) : String(Math.round(mi)), unit: 'mi' };
-  }
-  if (metres < 1000) return { value: String(Math.round(metres)), unit: 'm' };
-  const km = metres / 1000;
-  return { value: km < 10 ? km.toFixed(1) : String(Math.round(km)), unit: 'km' };
 }
 
 function duration(seconds) {
@@ -1283,31 +1389,36 @@ function duration(seconds) {
   return h ? `${h}h${String(m).padStart(2, '0')}` : `${m}m`;
 }
 
-// HH:MM within a 24h day, wrapping negative/overflowing minutes the same
-// way real clock arithmetic would (arriving at 25:30 reads as 01:30 the
-// next day, not a broken display).
-function formatClock(totalMinutes) {
-  const m = ((Math.floor(totalMinutes) % 1440) + 1440) % 1440;
-  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-}
-
 function paint(t) {
-  markVisited(t.truck.x, t.truck.z);
+  markVisited(t.game, t.truck.x, t.truck.z);
 
   const speed = prefs.imperial ? t.truck.speed / KM_PER_MILE : t.truck.speed;
   $('speedVal').textContent = Math.max(0, Math.round(speed));
   $('speedUnit').textContent = prefs.imperial ? 'mph' : 'km/h';
+
+  const gear = t.truck.gear;
+  $('gearVal').textContent = gear > 0 ? gear : gear < 0 ? 'R' : 'N';
+
+  const rpmPct = t.truck.rpmMax > 0 ? Math.min(1, Math.max(0, t.truck.rpm / t.truck.rpmMax)) : 0;
+  const arc = $('rpmArc');
+  arc.style.strokeDasharray = RPM_CIRCUMFERENCE;
+  arc.style.strokeDashoffset = RPM_CIRCUMFERENCE * (1 - rpmPct);
+  arc.style.stroke = rpmPct > 0.9 ? 'var(--warn)' : '#f5a623';
 
   const lim = t.navigation.speedLimit;
   const limitEl = $('limit');
   if (lim > 0) {
     limitEl.classList.remove('hidden');
     limitEl.textContent = Math.round(prefs.imperial ? lim / KM_PER_MILE : lim);
-    $('speedRow').classList.toggle('over', t.truck.speed > lim + 3);
+    $('speedo').classList.toggle('over', t.truck.speed > lim + 3);
   } else {
     limitEl.classList.add('hidden');
-    $('speedRow').classList.remove('over');
+    $('speedo').classList.remove('over');
   }
+
+  $('fuelVal').textContent = `${Math.round(t.fuel.litres)} L`;
+  $('fuelCap').textContent = `of ${Math.round(t.fuel.capacity)}`;
+  $('fuel').classList.toggle('low', t.fuel.capacity > 0 && t.fuel.litres / t.fuel.capacity < 0.12);
 
   $('wallet').textContent = (t.game === 'ats' ? '$' : '€') + Math.round(t.wallet).toLocaleString();
   $('cargo').textContent = t.job
@@ -1316,150 +1427,23 @@ function paint(t) {
 
   $('dest').textContent = t.job?.destination || 'No destination set';
   $('remaining').textContent = t.navigation.distance >= 0 ? distance(t.navigation.distance) : '—';
-
-  // Both the clock and the ETA are in-game time, not real wall-clock time —
-  // matching the real in-dash GPS, which lives entirely inside the game's
-  // own clock rather than the player's. gameTime is minutes from the SDK's
-  // timeAbs field (RenCloud/scs-sdk-plugin); assumed to cycle with the
-  // game's day/night per that SDK's documented behaviour, not yet
-  // confirmed against real live telemetry — worth double-checking the
-  // very first time this runs against an actual game session.
-  $('clockTime').textContent = formatClock(t.gameTime);
-  $('etaClock').textContent = t.navigation.time >= 0
-    ? formatClock(t.gameTime + t.navigation.time / 60)
-    : '—';
-
-
-  updateManoeuvre(t);
+  $('etaSim').textContent = duration(t.navigation.time);
+  $('etaReal').textContent = duration(t.navigation.time / view.timeScale);
 }
 
-/** Drops turns behind the truck and shows a live countdown to the next one. */
-const PASSED_METRES = 30;
-const ARRIVED_METRES = 60;
-
-// The manoeuvre card's arrow: a stem from the bottom, curving through a
-// fixed-length control arm into an arrowhead, all built from one angle. At
-// 0° the control point and tip land directly above the pivot, so the curve
-// degenerates into a straight line — "continue straight" draws an actual
-// straight arrow this way, not the turn shape with no rotation applied.
-// Sharper angles bend harder; TURN_MAX_ANGLE keeps a near-U-turn from
-// folding the tip back past the pivot into an illegible knot.
-//
-// The worst case for the icon's own bounds isn't a sharp turn, it's 0°:
-// the tip reaches its highest point (PIVOT.y - 2*ARM) when the arm points
-// straight up with nothing to bend it sideways back into frame. These
-// constants keep that highest point (and the arrowhead beyond it) inside
-// the 0-32 viewBox with margin, verified by sweeping every angle from 0 to
-// TURN_MAX_ANGLE. An earlier version (PIVOT.y 13, ARM 9, HEAD_LEN 6.5) let
-// the tip go negative for most turn angles below ~64°, silently clipped by
-// the SVG's default overflow:hidden — it read as a squashed near-invisible
-// icon rather than an error, worst on the narrow screen it's mostly seen on.
-const TURN_PIVOT = { x: 16, y: 16 };
-const TURN_STEM_Y = 29;
-const TURN_ARM = 7;
-const TURN_HEAD_LEN = 5;
-const TURN_HEAD_SPREAD = (38 * Math.PI) / 180;
-const TURN_MAX_ANGLE = 150;
-
-// Left turns mirror every x-coordinate across the icon's own centre
-// (TURN_PIVOT.x, exactly the middle of the 32-wide viewBox) instead of
-// applying a CSS scaleX(-1) to the <svg>. SVG's transform-origin/
-// transform-box interaction has a documented history of cross-browser
-// inconsistency specifically for inline SVG (older WebKit engines resolved
-// the origin differently than the current spec default), which could mirror
-// around the wrong point on some devices — small enough to be invisible at
-// 34px, more obvious at the 22px compact size. Baking the reflection into
-// the coordinates themselves removes the whole class of risk: there's no
-// browser default left to disagree about.
-function mirrorX(x, mirror) {
-  return mirror ? 2 * TURN_PIVOT.x - x : x;
-}
-
-function setManoeuvreArrow(angleDeg, direction) {
-  const mirror = direction === 'left';
-  const theta = (Math.min(Math.abs(angleDeg), TURN_MAX_ANGLE) * Math.PI) / 180;
-  const control = { x: TURN_PIVOT.x, y: TURN_PIVOT.y - TURN_ARM };
-  const dir = { x: Math.sin(theta), y: -Math.cos(theta) };
-  const tip = { x: control.x + dir.x * TURN_ARM, y: control.y + dir.y * TURN_ARM };
-  const back = { x: -dir.x, y: -dir.y };
-  const rotate = (v, a) => ({
-    x: v.x * Math.cos(a) - v.y * Math.sin(a),
-    y: v.x * Math.sin(a) + v.y * Math.cos(a),
-  });
-  const w1 = rotate(back, TURN_HEAD_SPREAD);
-  const w2 = rotate(back, -TURN_HEAD_SPREAD);
-
-  const tipX = mirrorX(tip.x, mirror);
-  $('turnArm').setAttribute('d',
-    `M ${mirrorX(TURN_PIVOT.x, mirror)} ${TURN_STEM_Y} V ${TURN_PIVOT.y} Q ${mirrorX(control.x, mirror)} ${control.y} ${tipX.toFixed(2)} ${tip.y.toFixed(2)}`);
-  $('turnHead').setAttribute('d',
-    `M ${mirrorX(tip.x + w1.x * TURN_HEAD_LEN, mirror).toFixed(2)} ${(tip.y + w1.y * TURN_HEAD_LEN).toFixed(2)} ` +
-    `L ${tipX.toFixed(2)} ${tip.y.toFixed(2)} ` +
-    `L ${mirrorX(tip.x + w2.x * TURN_HEAD_LEN, mirror).toFixed(2)} ${(tip.y + w2.y * TURN_HEAD_LEN).toFixed(2)}`);
-}
-
-function updateManoeuvre(t) {
-  const card = $('manoeuvre');
-  if (!route || !route.points?.length) {
-    card.classList.remove('on', 'arrived');
-    $('thenPreview').classList.remove('on');
-    return;
-  }
-
-  while (route.manoeuvres?.length) {
-    const next = route.manoeuvres[0];
-    const d = Math.hypot(t.truck.x - next.x, t.truck.z - next.z);
-    if (d < PASSED_METRES) {
-      route.manoeuvres.shift();
-      continue;
-    }
-    card.classList.add('on');
-    card.classList.remove('arrived');
-    const nextParts = turnDistanceParts(d);
-    $('turnDist').textContent = nextParts.value;
-    $('turnUnit').textContent = nextParts.unit;
-    $('turnRoad').textContent = `Turn ${next.direction}`;
-    setManoeuvreArrow(next.angle, next.direction);
-
-    // A preview of the turn after this one — distance is from this turn's
-    // own point to the next one's, not from the truck, since that's the
-    // "then, in N more" reading a driver actually wants once they've
-    // pictured making the first turn.
-    const then = route.manoeuvres[1];
-    const thenEl = $('thenPreview');
-    if (then) {
-      const thenD = Math.hypot(then.x - next.x, then.z - next.z);
-      const thenParts = turnDistanceParts(thenD);
-      thenEl.textContent = `Then ${then.direction === 'left' ? '↰' : '↱'} ${thenParts.value}${thenParts.unit}`;
-      thenEl.classList.add('on');
-    } else {
-      thenEl.classList.remove('on');
-    }
-    return;
-  }
-  $('thenPreview').classList.remove('on');
-
-  // No turns left — either the route never had one (a straight shot) or
-  // they've all been passed. Rather than the card going blank for the rest
-  // of the trip, show progress toward the destination itself, then a
-  // distinct arrival state once you're actually there.
-  const dest = route.points[route.points.length - 1];
-  const dFinal = Math.hypot(t.truck.x - dest.x, t.truck.z - dest.z);
-
-  if (dFinal < ARRIVED_METRES) {
-    card.classList.add('on', 'arrived');
-    $('turnRoad').textContent = 'Arrived';
-    return;
-  }
-
-  card.classList.add('on');
-  card.classList.remove('arrived');
-  const finalParts = turnDistanceParts(dFinal);
-  $('turnDist').textContent = finalParts.value;
-  $('turnUnit').textContent = finalParts.unit;
-  $('turnRoad').textContent = 'Continue straight';
-  setManoeuvreArrow(0, 'right');
-}
+// The turn-by-turn card (distance/direction/"then" preview) and the on-map
+// chevron at each upcoming turn were both removed on request — the card's
+// route data comes from Rig Radar's own independently-computed path
+// (Dijkstra over the compiled map graph), not from anything the game
+// itself exposes, since telemetry has no "next turn" field to read — so
+// on at least one real drive its instructions disagreed with the path
+// the game's own GPS was actually suggesting. Not something fixable by
+// adjusting this app's code: there's no telemetry field to diff against
+// to confirm which path is "right", only two independently valid ones
+// that don't always agree. route.manoeuvres itself is still computed and
+// sent by the server (lib/router.js's buildManoeuvres) since other
+// clients of the same route data may still want it — nothing left here
+// reads it client-side.
 
 // ---------------------------------------------------------------------------
 // Telemetry stream
@@ -1475,7 +1459,7 @@ function connect() {
     try { stream.close(); } catch {}
   }
 
-  stream = new EventSource('/api/stream');
+  stream = new EventSource(apiUrl('/api/stream'));
 
   stream.onmessage = (event) => {
     lastMessageAt = Date.now();
@@ -1621,7 +1605,7 @@ $('searchInput').addEventListener('input', (e) => {
 async function runSearch(query) {
   const box = $('searchResults');
   try {
-    const res = await fetch(`/api/search?${gameQuery()}q=${encodeURIComponent(query)}`);
+    const res = await fetch(apiUrl(`/api/search?${gameQuery()}q=${encodeURIComponent(query)}`));
     if (res.status === 501) {
       const body = await res.json();
       box.className = 'empty';
@@ -1653,7 +1637,7 @@ async function runSearch(query) {
  * Shared by the initial manual pick and by reroute-on-deviation refetching
  * the same manual destination from wherever the truck actually is now. */
 async function fetchRouteTo(destId, fromXZ) {
-  const res = await fetch(`/api/route?${gameQuery()}`, {
+  const res = await fetch(apiUrl(`/api/route?${gameQuery()}`), {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ to: destId, from: fromXZ }),
@@ -1670,7 +1654,7 @@ async function fetchRouteTo(destId, fromXZ) {
 async function setDestination(item) {
   const box = $('searchResults');
   try {
-    const res = await fetch(`/api/route?${gameQuery()}`, {
+    const res = await fetch(apiUrl(`/api/route?${gameQuery()}`), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ to: item.id, from: telemetry?.truck }),
@@ -1703,9 +1687,16 @@ requestAnimationFrame(tick);
 $('serverVal').textContent = location.host;
 // Read from the server rather than hardcoding a second copy of the version
 // string here — the two had already drifted out of sync once.
-fetch('/api/status').then((r) => r.json()).then((s) => {
+fetch(apiUrl('/api/status')).then((r) => r.json()).then((s) => {
   $('versionVal').textContent = s.version;
 }).catch(() => {});
+
+$('apiBaseInput').value = apiBase;
+$('apiBaseInput').addEventListener('change', () => {
+  const next = $('apiBaseInput').value.trim().replace(/\/$/, '');
+  try { localStorage.setItem('rigradar.apiBase', next); } catch {}
+  location.reload();
+});
 
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('sw.js').catch(() => {});
