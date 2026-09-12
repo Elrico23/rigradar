@@ -4,6 +4,20 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.10.1** — Fixed the new bottom bar overlapping itself at narrower
+phone widths (~314px) — a real gap in 2.10.0's own testing, which only
+checked 390px+ viewports. `.stats` laid out its four labelled values with
+`display: flex` and no wrap; at 314px there wasn't room for all four,
+and since flex items shrink below their own content's width by default
+(and the text itself is `white-space: nowrap`, so it can't wrap
+internally either), the result wasn't truncation — it was each stat's
+text silently overlapping the next one, confirmed by measuring the
+actual rendered boxes (18-40px wide holding text that needs 35px+).
+Switched to `flex-wrap: wrap` so a narrow phone gets two clean rows
+instead of one illegible one; verified no overlaps at 314px (checked all
+stat-pairs and both round buttons programmatically) and confirmed 390px+
+still lays out on one line as before.
+
 **2.10.0** — A full reskin to match ETS2/ATS's own in-dash GPS specifically
 (not TruckSim GPS, not "Rig Radar's own take" — this one is meant to look
 like the real thing), on explicit spec: grey/orange/green road-and-route

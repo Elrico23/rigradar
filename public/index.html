@@ -155,9 +155,15 @@
   /* Clock / ETA / distance / speed+limit, in that order — the same four
      things (and nothing else) the real in-dash GPS shows along its own
      bottom bar. */
-  .waybill .stats { display: flex; align-items: flex-end; gap: 14px;
-                    margin-top: 6px; overflow: hidden; }
-  .waybill .stat { display: flex; flex-direction: column; min-width: 0; }
+  /* flex-wrap rather than a fixed one-line layout: at 314px-class phone
+     widths, four labelled stats plus the two round buttons don't fit on
+     one line without shrinking each stat narrower than its own text,
+     which doesn't truncate (nowrap) — it silently overlaps the next stat
+     instead. Wrapping to a second line when needed is a much safer
+     failure mode than overlapping, illegible text. */
+  .waybill .stats { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 16px;
+                    margin-top: 6px; }
+  .waybill .stat { display: flex; flex-direction: column; min-width: 44px; }
   .waybill .stat .cap { font-size: 9px; color: var(--fog); text-transform: uppercase;
                          letter-spacing: .06em; white-space: nowrap; }
   .waybill .stat b { font-size: 15px; font-weight: 700; color: var(--chalk);
