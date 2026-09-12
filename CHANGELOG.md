@@ -4,6 +4,23 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.13.1** — Two live phone reports once the Netlify install was actually
+working: dragging the map felt "very sticky," and the tilt didn't feel as
+3D as TruckSim GPS.
+
+- **Fixed drag** — `#map` never set `touch-action`, so the browser's own
+  gesture handling could intercept a single-finger drag before the pan
+  code ever saw it. Added `touch-action: none`.
+- **Fixed the actual cause of the stickiness** — `view.bearing` was
+  lerping toward the live truck heading every frame regardless of
+  `view.followTruck`, so heading-up mode kept rotating the whole map
+  under the user's finger while they tried to pan. Now frozen along with
+  position until the camera re-follows.
+- **Stronger tilt** — `TILT_STRENGTH` 1.3 → 1.8 (closer horizon, steeper
+  foreshortening) and the perspective narrowing toward the horizon
+  strengthened (0.6 → 0.9 of the same factor), the more "3D" cue that a
+  flat tilt-squish doesn't give.
+
 **2.13.0** — Hosting the shell on Netlify, since Android's real "Install
 app" flow turned out to never trust a self-signed CA no matter how the
 local server was configured (confirmed live: 2.11.3's HTTPS setup still

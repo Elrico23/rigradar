@@ -46,7 +46,7 @@
     overscroll-behavior: none;
   }
 
-  #map { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+  #map { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 
   .layer { position: fixed; inset: 0; pointer-events: none; }
   .layer > * { pointer-events: auto; }
@@ -718,7 +718,7 @@ const anchorY = () => {
  * this reduces exactly to the original flat linear mapping — so turning
  * either heading-up or tilt off is provably identical to how the map has
  * always worked. */
-const TILT_STRENGTH = 1.3;
+const TILT_STRENGTH = 1.8;
 
 function project(x, z) {
   const dx = x - view.centre.x;
@@ -738,7 +738,7 @@ function project(x, z) {
 
   const k = TILT_STRENGTH / H;
   const compressed = linearAhead / (1 + k * linearAhead);
-  const scale = 1 / (1 + k * linearAhead * 0.6);
+  const scale = 1 / (1 + k * linearAhead * 0.9);
   return [W / 2 + linearX * scale, anchorY() - compressed];
 }
 
@@ -1282,8 +1282,8 @@ function tick(now) {
   refreshReservedUIRects();
 
   if (telemetry) {
-    view.bearing = (lerpAngle(view.bearing, telemetry.truck.heading, Math.min(1, dt * 4)) + 360) % 360;
     if (view.followTruck) {
+      view.bearing = (lerpAngle(view.bearing, telemetry.truck.heading, Math.min(1, dt * 4)) + 360) % 360;
       view.centre.x = lerp(view.centre.x, telemetry.truck.x, Math.min(1, dt * 8));
       view.centre.z = lerp(view.centre.z, telemetry.truck.z, Math.min(1, dt * 8));
     }
