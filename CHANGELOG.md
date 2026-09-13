@@ -4,6 +4,21 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.15.2** — Two corrections after live feedback on 2.15.1.
+
+- **The on-map chevron is properly bent now**, not a straight arrow
+  rotated to the post-turn heading — that read as a generic pointer, not
+  a turn indicator. Rebuilt using the exact same stem + curved-control-
+  arm construction the turn-by-turn card's own icon already uses
+  (`setManoeuvreArrow`), just as its own separate, larger set of
+  constants since this draws at real map scale rather than inside a
+  fixed 32px HUD viewBox.
+- **Route line is a plain solid fill again**, not a dashed centreline —
+  the dashed "painted stripe" texture wasn't wanted; TruckSim GPS's own
+  route is a plain solid line, confirmed directly against it.
+- Verified both live: chevron bends correctly toward the real upcoming
+  turn's direction, route renders as a clean solid line with no dashes.
+
 **2.15.1** — Two more items from the ongoing TruckSim GPS comparison.
 
 - **Real interstate shield shape** for I/A-prefixed routes (rounded top,

@@ -529,7 +529,7 @@ function apiUrl(path) { return apiBase + path; }
 // every shell change — there's no server round-trip to derive it from,
 // since the whole point is telling the two apart when they can't reach
 // each other yet.
-const SHELL_VERSION = '2.15.1';
+const SHELL_VERSION = '2.15.2';
 
 // ---------------------------------------------------------------------------
 // Preferences
@@ -1147,6 +1147,9 @@ function drawRoute() {
   // enough to show a sliver of the visited-orange road peeking out on the
   // inside of the curve. More margin here is cheaper than perfectly
   // reconciling two independently-computed paths.
+  // Plain solid fill, not a dashed centreline — matches TruckSim GPS's own
+  // route line directly (a dashed stripe read as a texture the user didn't
+  // want, on request after a direct comparison).
   for (const [width, colour] of [[20, 'rgba(10,14,20,.85)'], [13, '#2e8fea']]) {
     ctx.lineWidth = width;
     ctx.strokeStyle = colour;
@@ -1154,20 +1157,6 @@ function drawRoute() {
     tracePointPolyline(route.points);
     ctx.stroke();
   }
-
-  // A dashed centreline reads as a painted road stripe rather than a flat
-  // fill, and gives the route a distinct texture from the solid-filled
-  // roads underneath it — save/restore around the dash so it can't leak
-  // into whatever draws next (the same guard drawFerries uses for its own
-  // dashed line).
-  ctx.save();
-  ctx.setLineDash([2, 9]);
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = 'rgba(238,243,246,.8)';
-  ctx.beginPath();
-  tracePointPolyline(route.points);
-  ctx.stroke();
-  ctx.restore();
 }
 
 function drawLabels() {
@@ -1486,15 +1475,48 @@ function drawTruck() {
  * GPS). Uses the same manoeuvre data already driving that card. Points in
  * the post-turn heading, adjusted for the map's own rotation in
  * heading-up mode the same way project() adjusts every other world-space
- * point, so it stays correctly oriented regardless of view mode. */
+ * point, so it stays correctly oriented regardless of view mode.
+ *
+ * Bent by the turn's actual angle through a stem + curved control arm,
+ * the same construction as the turn-by-turn card's own SVG icon
+ * (setManoeuvreArrow) — a straight arrow rotated to the post-turn heading
+ * read as a generic pointer, not a turn indicator, when this first went
+ * in. Kept as its own separate set of constants rather than reusing that
+ * icon's directly: this draws at real map scale, not inside a fixed
+ * 32px HUD viewBox, so the two need independently tunable sizes. */
+const MAP_ARROW_ARM = 13;
+const MAP_ARROW_HEAD_LEN = 9;
+const MAP_ARROW_HEAD_SPREAD = (38 * Math.PI) / 180;
+const MAP_ARROW_MAX_ANGLE = 150;
+const MAP_ARROW_STEM_LEN = 15;
+
 function drawManoeuvreArrow() {
   if (!route?.manoeuvres?.length) return;
   const m = route.manoeuvres[0];
   const [x, y] = project(m.x, m.z);
-  if (overlapsReservedUI(x - 18, y - 18, x + 18, y + 18)) return;
+  if (overlapsReservedUI(x - 26, y - 26, x + 26, y + 26)) return;
 
+  // The stem points back along the heading *before* the turn — same as
+  // the turn card's icon, where only the bent tip needs to show the turn
+  // itself, not the whole shape's rotation.
   const mapRot = prefs.headingUp ? view.bearing : 0;
-  const rot = ((m.heading - mapRot) * Math.PI) / 180;
+  const delta = (m.direction === 'left' ? 1 : -1) * m.angle;
+  const approachHeading = m.heading - delta;
+  const rot = ((approachHeading - mapRot) * Math.PI) / 180;
+
+  const mirror = m.direction === 'left';
+  const theta = (Math.min(m.angle, MAP_ARROW_MAX_ANGLE) * Math.PI) / 180;
+  const control = { x: 0, y: -MAP_ARROW_ARM };
+  const dir = { x: Math.sin(theta), y: -Math.cos(theta) };
+  const tip = { x: dir.x * MAP_ARROW_ARM, y: control.y + dir.y * MAP_ARROW_ARM };
+  const back = { x: -dir.x, y: -dir.y };
+  const rotateVec = (v, a) => ({
+    x: v.x * Math.cos(a) - v.y * Math.sin(a),
+    y: v.x * Math.sin(a) + v.y * Math.cos(a),
+  });
+  const w1 = rotateVec(back, MAP_ARROW_HEAD_SPREAD);
+  const w2 = rotateVec(back, -MAP_ARROW_HEAD_SPREAD);
+  const mx = (px) => (mirror ? -px : px);
 
   ctx.save();
   ctx.translate(x, y);
@@ -1502,17 +1524,24 @@ function drawManoeuvreArrow() {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
 
-  ctx.beginPath();
-  ctx.moveTo(0, 13);
-  ctx.lineTo(0, -8);
-  ctx.moveTo(-9, 1);
-  ctx.lineTo(0, -8);
-  ctx.lineTo(9, 1);
-  ctx.lineWidth = 6.5;
+  const tipX = mx(tip.x);
+  const path = () => {
+    ctx.beginPath();
+    ctx.moveTo(0, MAP_ARROW_STEM_LEN);
+    ctx.lineTo(0, 0);
+    ctx.quadraticCurveTo(mx(control.x), control.y, tipX, tip.y);
+    ctx.moveTo(mx(tip.x + w1.x * MAP_ARROW_HEAD_LEN), tip.y + w1.y * MAP_ARROW_HEAD_LEN);
+    ctx.lineTo(tipX, tip.y);
+    ctx.lineTo(mx(tip.x + w2.x * MAP_ARROW_HEAD_LEN), tip.y + w2.y * MAP_ARROW_HEAD_LEN);
+  };
+
+  path();
+  ctx.lineWidth = 7;
   ctx.strokeStyle = '#0a0e14';
   ctx.stroke();
 
-  ctx.lineWidth = 3.4;
+  path();
+  ctx.lineWidth = 3.6;
   ctx.strokeStyle = '#eef3f6';
   ctx.stroke();
 
