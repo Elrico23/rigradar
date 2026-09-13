@@ -298,13 +298,28 @@ console.log(`  search index: ${searchIndex.length} entries`);
 writeFileSync(join(OUT_DIR, 'search-index.json'), JSON.stringify(searchIndex));
 
 // ---------------------------------------------------------------------------
-// 5b. Road signs — highway shields ("US 400", "I-15") for the map to show at
-//     close zoom. The parser's POI file mixes several kinds of marker under
-//     one `type` field; only `type: "road"` is a route shield, the rest
-//     (parking, viewpoints, etc.) aren't relevant to a shield badge.
+// 5b. Road signs and facilities — both come from the same POI file, read
+//     once and shared: `type: "road"` is a highway shield ("US 400",
+//     "I-15"); `type: "facility"` is gas, parking, repair, and the like,
+//     each with an icon token that already names its category cleanly (no
+//     guessing from a company name or cargo list needed, unlike the
+//     "Company" entries in the search index above). Everything else
+//     (viewpoints, landmarks, ferries already covered separately) is
+//     dropped — not relevant to either a shield or a facility badge.
 // ---------------------------------------------------------------------------
 
+const FACILITY_KINDS = {
+  gas_ico: 'fuel',
+  parking_ico: 'rest',
+  service_ico: 'repair',
+  weigh_station_ico: 'weigh',
+  garage_large_ico: 'garage',
+  dealer_ico: 'dealer',
+  recruitment_ico: 'recruitment',
+};
+
 let signs = [];
+let facilities = [];
 try {
   const pois = readJson('pois');
   signs = pois
@@ -312,8 +327,13 @@ try {
     .map((p) => ({ x: p.x, z: p.y, label: formatShield(p.icon) }))
     .filter((s) => s.label);
   console.log(`  road signs: ${signs.length} of ${pois.length} POIs`);
+
+  facilities = pois
+    .filter((p) => p.type === 'facility' && FACILITY_KINDS[p.icon])
+    .map((p) => ({ x: p.x, z: p.y, kind: FACILITY_KINDS[p.icon] }));
+  console.log(`  facilities: ${facilities.length} of ${pois.length} POIs`);
 } catch {
-  console.log('  ⚠ no pois file found — skipping road signs');
+  console.log('  ⚠ no pois file found — skipping road signs and facilities');
 }
 
 /** "us400" -> "US 400", "i15" -> "I 15" (ATS: no country prefix at all) —
@@ -338,6 +358,7 @@ function formatShield(icon) {
 }
 
 writeFileSync(join(OUT_DIR, 'signs.json'), JSON.stringify(signs));
+writeFileSync(join(OUT_DIR, 'facilities.json'), JSON.stringify(facilities));
 
 // ---------------------------------------------------------------------------
 // 5c. City footprints — cities.json already carries its own `areas` array,

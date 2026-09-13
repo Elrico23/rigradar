@@ -4,6 +4,35 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.15.0** — Facility icons: gas, rest stops, repair shops, weigh
+stations, garages, dealers, and recruitment agencies now draw as small
+colour-coded badges on the map, on request after several TruckSim GPS
+comparison screenshots showed them. Required a full re-parse (Phase 2)
+to get at data the previous compile never kept.
+
+- **The parser's POI file already carries these cleanly** — a
+  `type: "facility"` entry with an icon token (`gas_ico`, `parking_ico`,
+  `service_ico`, `weigh_station_ico`, `garage_large_ico`, `dealer_ico`,
+  `recruitment_ico`) — no guessing from a company name or cargo list
+  needed. `compile-map.mjs` now extracts these into a new
+  `facilities.json` alongside the existing `signs.json`, reusing the
+  same POI read rather than a second pass over it.
+- **Client draws real pictograms for the three that come up while
+  driving** (fuel pump, bed, wrench), and a bold initial for the four
+  rarer ones — hand-drawn shapes in the same visual language as the
+  truck arrow and compass, not emoji, which would've been a second,
+  inconsistent icon style next to everything else on this map.
+- Verified with synthetic facility placements at known screen positions
+  (six categories, one of each) after real ones happened to land
+  off-screen the first time — confirmed colours, pictograms, and the
+  existing "only legible up close" zoom gate all work correctly.
+- **Investigated, not fixed: the Zvolen destination gap.** A full,
+  fresh re-parse — correct DLC (`dlc_east.scs`) present, current game
+  version — still has zero mentions of Zvolen anywhere in the output.
+  That rules out a stale original parse (the working theory in 2.14.2);
+  this looks like a genuine `truckermudgeon/maps` limitation, not
+  something fixable in this app's own code.
+
 **2.14.4** — Added a "Delivery Complete" popup, on request after a
 TruckSim GPS screenshot showed one. Client-side only, entirely in
 `public/index.html` — no server changes, and nothing persisted, unlike
