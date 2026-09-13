@@ -490,6 +490,17 @@
   </div>
 </div>
 
+<div class="sheet" id="deliverySheet">
+  <div class="panel">
+    <h2>Delivery Complete</h2>
+    <div class="row"><span>Earned</span><b id="dcIncome">—</b></div>
+    <div class="row"><span>Distance driven</span><b id="dcDistance">—</b></div>
+    <div class="row"><span>Truck condition</span><b id="dcDamage">—</b></div>
+    <div class="row"><span>Close</span><button class="round" data-close aria-label="Close">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+  </div>
+</div>
+
 <script>
 'use strict';
 
@@ -518,7 +529,7 @@ function apiUrl(path) { return apiBase + path; }
 // every shell change — there's no server round-trip to derive it from,
 // since the whole point is telling the two apart when they can't reach
 // each other yet.
-const SHELL_VERSION = '2.14.3';
+const SHELL_VERSION = '2.14.4';
 
 // ---------------------------------------------------------------------------
 // Preferences
@@ -1622,6 +1633,72 @@ function paint(t) {
   updateManoeuvre(t);
 }
 
+// ---------------------------------------------------------------------------
+// Delivery Complete popup
+// ---------------------------------------------------------------------------
+
+// Distance driven has no odometer to read from telemetry — estimated by
+// integrating speed over wall-clock time while a job is active, the same
+// approach (and the same caveat) a deleted Logbook feature used earlier.
+// A trip shorter than this reads as an immediate job-board cancel rather
+// than a real haul, so it's skipped entirely instead of popping up a
+// "Delivery Complete" card for something that wasn't actually delivered.
+const TRIP_ABORT_DISTANCE_M = 300;
+const TRIP_ABORT_DURATION_S = 20;
+const TRIP_MAX_FRAME_GAP_S = 2;
+
+let activeTrip = null;
+
+function tripJobStart(job, t) {
+  activeTrip = {
+    startedAt: Date.now(),
+    lastFrameAt: Date.now(),
+    distanceM: 0,
+    damageStart: { ...t.damage },
+    income: job.income,
+  };
+}
+
+function tripJobFrame(t) {
+  const now = Date.now();
+  const dt = Math.min((now - activeTrip.lastFrameAt) / 1000, TRIP_MAX_FRAME_GAP_S);
+  activeTrip.lastFrameAt = now;
+  if (!t.paused) activeTrip.distanceM += (t.truck.speed / 3.6) * dt;
+}
+
+// The plugin doesn't publish trailer/cargo wear on this offset table (see
+// lib/telemetry.js) — only truck-part wear (engine, transmission, cabin,
+// chassis, wheels) — so this reports truck condition, not literally cargo
+// damage, even though the two often move together in practice.
+function tripJobEnd(lastJob, t) {
+  const trip = activeTrip;
+  activeTrip = null;
+  if (!trip) return;
+
+  const durationS = (Date.now() - trip.startedAt) / 1000;
+  if (trip.distanceM < TRIP_ABORT_DISTANCE_M && durationS < TRIP_ABORT_DURATION_S) return;
+
+  let worstDelta = 0;
+  for (const key of Object.keys(t.damage)) {
+    const d = (t.damage[key] || 0) - (trip.damageStart[key] || 0);
+    if (d > worstDelta) worstDelta = d;
+  }
+
+  const income = (lastJob && lastJob.income) || trip.income;
+  $('dcIncome').textContent = (t.game === 'ats' ? '$' : '€') + Math.round(income || 0).toLocaleString();
+  $('dcDistance').textContent = distance(trip.distanceM);
+  $('dcDamage').textContent = worstDelta > 0.001 ? `${Math.round(worstDelta * 100)}% wear` : 'No new damage';
+  openSheet('deliverySheet');
+}
+
+/** Call once per applied telemetry frame, passing the job as it stood
+ * *before* this frame overwrites it, plus the frame itself. */
+function observeTrip(previousJob, t) {
+  if (t.job && !previousJob) tripJobStart(t.job, t);
+  else if (t.job && previousJob) tripJobFrame(t);
+  else if (!t.job && previousJob) tripJobEnd(previousJob, t);
+}
+
 /** Drops turns behind the truck and shows a live countdown to the next one.
  * Restored on request after removal in 2.11.0 — the route this reads is
  * Rig Radar's own independently-computed path (Dijkstra over the compiled
@@ -1775,6 +1852,7 @@ function connect() {
 
   stream.onmessage = (event) => {
     lastMessageAt = Date.now();
+    const previousJob = telemetry?.job;
     try {
       telemetry = JSON.parse(event.data);
     } catch {
@@ -1787,6 +1865,7 @@ function connect() {
       view.bearing = telemetry.truck.heading;
     }
     paint(telemetry);
+    observeTrip(previousJob, telemetry);
     maybeAutoRoute(telemetry);
     checkRouteDeviation(telemetry);
   };

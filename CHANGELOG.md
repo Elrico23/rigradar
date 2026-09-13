@@ -4,6 +4,30 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.14.4** — Added a "Delivery Complete" popup, on request after a
+TruckSim GPS screenshot showed one. Client-side only, entirely in
+`public/index.html` — no server changes, and nothing persisted, unlike
+the deleted Logbook feature this reuses the trip-tracking approach of.
+
+- Detects a job's end from the telemetry stream's own job field going
+  non-null → null between frames (`observeTrip`, hooked into
+  `stream.onmessage` right where `paint()` already runs each frame).
+- Distance driven is estimated by integrating speed over wall-clock
+  time while a job is active — no odometer exists to read instead, same
+  caveat the deleted Logbook had.
+- Reports "truck condition" (engine/transmission/cabin/chassis/wheels
+  wear delta), not literally cargo damage — the plugin's shared-memory
+  offsets here don't cover the trailer's own wear channel at all, so
+  claiming to show cargo condition specifically would be wrong.
+- A trip under 300m/20s is treated as a job-board cancel and shows no
+  popup at all, rather than reporting a non-delivery as delivered.
+- Does not show "+626 XP" the way TruckSim's version does — the
+  telemetry plugin doesn't expose an XP field, so nothing plausible
+  exists to put there.
+- Verified with synthetic job-start/job-end transitions in the console:
+  a normal delivery, a sub-threshold cancel (correctly suppressed), and
+  a zero-damage trip (correctly reads "No new damage").
+
 **2.14.3** — Closed most of the remaining gap from a direct TruckSim GPS
 side-by-side comparison (same job, same moment, screenshotted on both
 apps at once).
