@@ -4,6 +4,26 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.15.1** — Two more items from the ongoing TruckSim GPS comparison.
+
+- **Real interstate shield shape** for I/A-prefixed routes (rounded top,
+  straight sides, tapering to a point — the actual US Interstate
+  silhouette, red band over blue body) instead of the plain dark pill
+  every other road class still uses. Shows just the route number ("5",
+  "10"), not the "I"/"A" prefix — that distinction is already carried by
+  the shield's own colour and shape now, so repeating it inside would
+  just be noise. US/European/other road classes are untouched.
+- **The on-map turn chevron is back**, drawn at the next manoeuvre's
+  actual position and oriented to the post-turn heading. Removed in
+  2.11.1 on request; brought back on request after repeated TruckSim
+  comparisons — same routing-accuracy caveat as the turn-by-turn card
+  applies here too, since it's the same underlying data.
+- Verified both with synthetic placements (real interstate signs and a
+  real upcoming turn happened to be out of a testable position at the
+  time) — shield renders correctly for I-routes only, chevron renders
+  and rotates correctly relative to the map's own rotation in
+  heading-up mode.
+
 **2.15.0** — Facility icons: gas, rest stops, repair shops, weigh
 stations, garages, dealers, and recruitment agencies now draw as small
 colour-coded badges on the map, on request after several TruckSim GPS

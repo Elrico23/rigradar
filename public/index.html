@@ -529,7 +529,7 @@ function apiUrl(path) { return apiBase + path; }
 // every shell change — there's no server round-trip to derive it from,
 // since the whole point is telling the two apart when they can't reach
 // each other yet.
-const SHELL_VERSION = '2.15.0';
+const SHELL_VERSION = '2.15.1';
 
 // ---------------------------------------------------------------------------
 // Preferences
@@ -1272,10 +1272,49 @@ function drawCompanyBadge(x, y) {
  * pill. Colour-coding them the same way makes the map legible at a glance
  * rather than every road number looking identical. */
 function shieldStyle(label) {
-  if (/^[IA][\s-]/i.test(label)) return { bg: '#2c5aa0', fg: '#ffffff', border: '#ffffff' }; // Interstate / ATS motorway
+  if (/^[IA][\s-]/i.test(label)) return { bg: '#2c5aa0', fg: '#ffffff', border: '#ffffff', interstate: true };
   if (/^US[\s-]/i.test(label)) return { bg: '#eef3f6', fg: '#10161c', border: '#10161c' };    // US route
   if (/^E[\s-]/i.test(label)) return { bg: '#2f6e3f', fg: '#ffffff', border: '#ffffff' };     // European route
   return { bg: '#212b36', fg: '#dce6ec', border: '#7a8a9a' };                                  // state / B-road / other
+}
+
+/** Traces a simplified US Interstate shield: rounded top, straight sides,
+ * tapering to a point at the bottom — the same silhouette real interstate
+ * signage uses, rather than the plain pill every other road class gets.
+ * `inset` shrinks the whole outline inward by that many pixels, so the
+ * same path fn draws both the white border (inset 0) and the coloured
+ * fill just inside it (inset > 0) without duplicating the geometry. */
+function traceShieldPath(x, y, halfW, halfH, inset) {
+  const hw = halfW - inset, hh = halfH - inset;
+  const r = Math.max(1, 3 - inset * 0.3);
+  const taper = hh * 0.45;
+  ctx.beginPath();
+  ctx.moveTo(x - hw + r, y - hh);
+  ctx.arcTo(x + hw, y - hh, x + hw, y - hh + r, r);
+  ctx.lineTo(x + hw, y + hh - taper);
+  ctx.lineTo(x, y + hh);
+  ctx.lineTo(x - hw, y + hh - taper);
+  ctx.lineTo(x - hw, y - hh + r);
+  ctx.arcTo(x - hw, y - hh, x - hw + r, y - hh, r);
+  ctx.closePath();
+}
+
+function drawInterstateShield(x, y, halfW, halfH, number) {
+  traceShieldPath(x, y, halfW, halfH, 0);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+
+  ctx.save();
+  traceShieldPath(x, y, halfW, halfH, 1.5);
+  ctx.clip();
+  ctx.fillStyle = '#2c5aa0';
+  ctx.fillRect(x - halfW, y - halfH, halfW * 2, halfH * 2);
+  ctx.fillStyle = '#a5231f';
+  ctx.fillRect(x - halfW, y - halfH, halfW * 2, halfH * 0.85);
+  ctx.restore();
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(number, x, y + halfH * 0.2);
 }
 
 function drawSigns() {
@@ -1289,8 +1328,14 @@ function drawSigns() {
   for (const s of signs) {
     const [x, y] = project(s.x, s.z);
     const style = shieldStyle(s.label);
-    const w = ctx.measureText(s.label).width + 10;
-    const x0 = x - w / 2, y0 = y - 9, x1 = x + w / 2, y1 = y + 9;
+    // Real interstate signage shows only the route number ("5", "10"), not
+    // the "I"/"A" prefix used elsewhere in this app to tell the category
+    // apart — that distinction is already carried by the shield's own
+    // colour and shape here, so repeating it inside would just be noise.
+    const number = style.interstate ? s.label.replace(/^[IA][\s-]*/i, '') : s.label;
+    const w = ctx.measureText(number).width + (style.interstate ? 14 : 10);
+    const h = style.interstate ? Math.max(20, w * 0.85) : 18;
+    const x0 = x - w / 2, y0 = y - h / 2, x1 = x + w / 2, y1 = y + h / 2;
     // The shield is drawn on the canvas, which has no idea the zoom
     // buttons/compass/link pill sit on top of it as opaque HTML — a shield
     // that happens to project underneath one gets visually clipped by it,
@@ -1300,15 +1345,21 @@ function drawSigns() {
     // (cached once per frame in tick(), not queried per shield) avoids
     // that without needing the canvas to know about DOM layout at all.
     if (overlapsReservedUI(x0, y0, x1, y1)) continue;
+
+    if (style.interstate) {
+      drawInterstateShield(x, y, w / 2, h / 2, number);
+      continue;
+    }
+
     ctx.fillStyle = style.bg;
     ctx.strokeStyle = style.border;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.roundRect(x0, y0, w, 18, 4);
+    ctx.roundRect(x0, y0, w, h, 4);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = style.fg;
-    ctx.fillText(s.label, x, y + 1);
+    ctx.fillText(number, x, y + 1);
   }
 }
 
@@ -1428,6 +1479,46 @@ function drawTruck() {
   ctx.restore();
 }
 
+/** A bold chevron on the road at the next turn — TruckSim GPS's own on-map
+ * indicator, restored on request after being removed in 2.11.1 (the same
+ * routing-accuracy caveat as the turn-by-turn card applies here too: this
+ * is Rig Radar's own computed route, which can disagree with the game's
+ * GPS). Uses the same manoeuvre data already driving that card. Points in
+ * the post-turn heading, adjusted for the map's own rotation in
+ * heading-up mode the same way project() adjusts every other world-space
+ * point, so it stays correctly oriented regardless of view mode. */
+function drawManoeuvreArrow() {
+  if (!route?.manoeuvres?.length) return;
+  const m = route.manoeuvres[0];
+  const [x, y] = project(m.x, m.z);
+  if (overlapsReservedUI(x - 18, y - 18, x + 18, y + 18)) return;
+
+  const mapRot = prefs.headingUp ? view.bearing : 0;
+  const rot = ((m.heading - mapRot) * Math.PI) / 180;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rot);
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  ctx.beginPath();
+  ctx.moveTo(0, 13);
+  ctx.lineTo(0, -8);
+  ctx.moveTo(-9, 1);
+  ctx.lineTo(0, -8);
+  ctx.lineTo(9, 1);
+  ctx.lineWidth = 6.5;
+  ctx.strokeStyle = '#0a0e14';
+  ctx.stroke();
+
+  ctx.lineWidth = 3.4;
+  ctx.strokeStyle = '#eef3f6';
+  ctx.stroke();
+
+  ctx.restore();
+}
+
 /** A classic map-pin teardrop at the destination — distinct from the plain
  * dot every company gets, since this is the one point on the route that
  * actually matters most: where the trip ends. Green, matching the
@@ -1502,6 +1593,7 @@ function render() {
   drawFacilities();
   drawLabels();
   drawHorizonFade();
+  drawManoeuvreArrow();
   drawDestinationPin();
   drawTruck();
 }
