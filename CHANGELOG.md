@@ -4,6 +4,29 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.14.3** — Closed most of the remaining gap from a direct TruckSim GPS
+side-by-side comparison (same job, same moment, screenshotted on both
+apps at once).
+
+- **Speed and fuel gauges got the same ring-arc treatment gear's RPM
+  dial already had**, instead of plain text in a circle — one gauge
+  language across all three rather than introducing a literal needle
+  dial that would've matched TruckSim more literally but read as a
+  second, inconsistent gauge style next to gear's own ring. Speed's
+  ring fills toward the current speed limit (a flat 100 with none
+  known) and turns red past it, reusing the existing `.over` state;
+  fuel's fills toward capacity and turns red under the existing `.low`
+  threshold.
+- **Destination reformatted** from the game's raw "City — Company"
+  string to "To: Company (City)", matching TruckSim's phrasing.
+- Verified live: both gauges' fill and warning-color states (forced via
+  synthetic telemetry in the console) render correctly.
+
+Remaining gaps from that comparison, deliberately not done: border-
+crossing country flags (needs POI data Rig Radar doesn't parse), and
+the route/turn card for that specific job (a compiled-map data gap —
+see 2.14.2 — not a rendering one).
+
 **2.14.2** — Added a destination pin: a green map-pin teardrop at the
 route's endpoint, on request after a TruckSim GPS comparison screenshot
 showed one. Distinct from the plain dot every company gets, and drawn
