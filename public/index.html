@@ -92,6 +92,44 @@
   .recenter.on { opacity: 1; transform: none; pointer-events: auto; }
   .recenter svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; }
 
+  /* ---- next manoeuvre --------------------------------------------------
+     Restored from the same pre-2.10.0 design as the gauges below, on
+     request after a TruckNav comparison — removed in 2.11.0 because its
+     route comes from this app's own independently-computed path (Dijkstra
+     over the compiled map graph), which can disagree with the game's own
+     GPS with no telemetry field to arbitrate. That tradeoff is unchanged
+     and was explicitly re-confirmed before bringing this back. */
+
+  .manoeuvre {
+    position: absolute; top: calc(64px + var(--safe-t)); left: 12px;
+    display: flex; align-items: center; gap: 16px;
+    padding: 12px 22px 12px 18px; border-radius: 14px;
+    background: rgba(10,14,20,.88);
+    border: 1px solid var(--kerb);
+    border-left: 3px solid var(--beacon);
+    backdrop-filter: blur(12px);
+    opacity: 0; transform: translateY(-6px);
+    transition: opacity .2s ease, transform .2s ease, top .15s ease;
+  }
+  .manoeuvre.on { opacity: 1; transform: none; }
+  .manoeuvre .dist { font-size: 40px; font-weight: 700; line-height: .9; }
+  .manoeuvre .dist i { font-size: 18px; font-style: normal; color: var(--fog); margin-left: 3px; }
+  .manoeuvre .road { font-size: 13px; color: var(--fog); margin-top: 4px; }
+  .manoeuvre .then { font-size: 11px; color: var(--fog); opacity: .7; margin-top: 3px; display: none; }
+  .manoeuvre .then.on { display: block; }
+  .manoeuvre svg { width: 34px; height: 34px; fill: none; stroke: var(--beacon); stroke-width: 2.4;
+                   stroke-linecap: round; stroke-linejoin: round; }
+  .manoeuvre.arrived { border-left-color: var(--go); }
+  .manoeuvre.arrived svg,
+  .manoeuvre.arrived .dist,
+  .manoeuvre.arrived .then { display: none; }
+  /* "Arrived" has no descenders, so a normal line-height leaves the empty
+     descender space sitting entirely below the glyphs, pushing them above
+     centre in the pill — line-height 1 plus a small top nudge balances the
+     two even gaps (verified 39px/39px top vs bottom against this font). */
+  .manoeuvre.arrived .road { color: var(--go); font-size: 21px; font-weight: 700; margin-top: 0;
+                              line-height: 1; padding-top: 4px; }
+
   /* ---- gauges ---------------------------------------------------------
      Restored from the pre-2.10.0 design (gear/speed/fuel), on request to
      match TruckSim GPS's own look rather than the base game's in-dash
@@ -136,6 +174,44 @@
   #fuel .val { font-size: 21px; font-weight: 700; line-height: 1.1; }
   #fuel .cap { font-size: 11px; color: var(--fog); }
   #fuel.low .val { color: var(--warn); }
+
+  /* Every offset above is tuned for a real phone's height (600px+). Below
+     that, the manoeuvre card (top-anchored) and the gear gauge
+     (bottom-anchored, stacked above speedo/fuel) run out of shared room
+     and land on top of each other — on a genuinely short viewport (a
+     landscape phone, a squeezed split-screen window) gear's top edge can
+     end up above the manoeuvre card's bottom edge entirely. Compacting
+     the manoeuvre card alone can't fix that: the gauge cluster's own
+     stacked offsets need to shrink too, or there's nowhere left to
+     reclaim the room from. */
+  @media (max-height: 480px) {
+    .manoeuvre {
+      top: calc(40px + var(--safe-t));
+      padding: 6px 14px 6px 10px; gap: 10px;
+    }
+    .manoeuvre svg { width: 22px; height: 22px; }
+    .manoeuvre .dist { font-size: 24px; }
+    .manoeuvre .dist i { font-size: 11px; }
+    .manoeuvre .road { font-size: 10px; margin-top: 2px; }
+    .manoeuvre.arrived .road { font-size: 14px; padding-top: 3px; }
+    /* No room for a third line here — the compact card's height was tuned
+       against the gear gauge's own compact position with only 18-24px to
+       spare; adding the "then" preview's height back in would eat that
+       margin. Hidden rather than shrunk further, since the immediate turn
+       matters more than a preview of the one after it when space is this
+       tight. */
+    .manoeuvre .then.on { display: none; }
+
+    #gear { width: 60px; height: 60px; bottom: 180px; }
+    #gear .val { font-size: 24px; }
+    #gear .cap { font-size: 8px; }
+
+    #speedo, #fuel { width: 68px; height: 68px; bottom: 96px; }
+    #speedo .val { font-size: 26px; }
+    #fuel .val { font-size: 16px; }
+
+    .limit { width: 32px; height: 32px; bottom: 148px; left: 56px; border-width: 4px; font-size: 12px; }
+  }
 
   .zoom {
     position: absolute; right: 14px; bottom: 256px;
@@ -283,6 +359,18 @@
       <path d="M20 5 L13 32 L20 26 Z" fill="#7a8a9a"/>
     </svg>
   </button>
+
+  <div class="manoeuvre" id="manoeuvre">
+    <svg viewBox="0 0 32 32" aria-hidden="true">
+      <path id="turnArm"/>
+      <path id="turnHead"/>
+    </svg>
+    <div>
+      <div class="dist"><span id="turnDist">—</span><i id="turnUnit">km</i></div>
+      <div class="road" id="turnRoad">Waiting for a route</div>
+      <div class="then" id="thenPreview"></div>
+    </div>
+  </div>
 
   <div class="gauge" id="gear">
     <svg class="rpm-ring" viewBox="0 0 84 84" aria-hidden="true">
@@ -1429,21 +1517,144 @@ function paint(t) {
   $('remaining').textContent = t.navigation.distance >= 0 ? distance(t.navigation.distance) : '—';
   $('etaSim').textContent = duration(t.navigation.time);
   $('etaReal').textContent = duration(t.navigation.time / view.timeScale);
+
+  updateManoeuvre(t);
 }
 
-// The turn-by-turn card (distance/direction/"then" preview) and the on-map
-// chevron at each upcoming turn were both removed on request — the card's
-// route data comes from Rig Radar's own independently-computed path
-// (Dijkstra over the compiled map graph), not from anything the game
-// itself exposes, since telemetry has no "next turn" field to read — so
-// on at least one real drive its instructions disagreed with the path
-// the game's own GPS was actually suggesting. Not something fixable by
-// adjusting this app's code: there's no telemetry field to diff against
-// to confirm which path is "right", only two independently valid ones
-// that don't always agree. route.manoeuvres itself is still computed and
-// sent by the server (lib/router.js's buildManoeuvres) since other
-// clients of the same route data may still want it — nothing left here
-// reads it client-side.
+/** Drops turns behind the truck and shows a live countdown to the next one.
+ * Restored on request after removal in 2.11.0 — the route this reads is
+ * Rig Radar's own independently-computed path (Dijkstra over the compiled
+ * map graph), not anything the game itself exposes, so its instructions
+ * can disagree with the game's own GPS with no telemetry field to
+ * arbitrate which one is "right". Known and accepted, not fixed. */
+const PASSED_METRES = 30;
+const ARRIVED_METRES = 60;
+const FT_PER_METRE = 3.28084;
+
+// The manoeuvre card's arrow: a stem from the bottom, curving through a
+// fixed-length control arm into an arrowhead, all built from one angle. At
+// 0° the control point and tip land directly above the pivot, so the curve
+// degenerates into a straight line — "continue straight" draws an actual
+// straight arrow this way, not the turn shape with no rotation applied.
+// Sharper angles bend harder; TURN_MAX_ANGLE keeps a near-U-turn from
+// folding the tip back past the pivot into an illegible knot.
+const TURN_PIVOT = { x: 16, y: 16 };
+const TURN_STEM_Y = 29;
+const TURN_ARM = 7;
+const TURN_HEAD_LEN = 5;
+const TURN_HEAD_SPREAD = (38 * Math.PI) / 180;
+const TURN_MAX_ANGLE = 150;
+
+// Left turns mirror every x-coordinate across the icon's own centre
+// (TURN_PIVOT.x) instead of applying a CSS scaleX(-1) to the <svg> — inline
+// SVG's transform-origin handling has a documented history of cross-browser
+// inconsistency, which could mirror around the wrong point on some devices.
+function mirrorX(x, mirror) {
+  return mirror ? 2 * TURN_PIVOT.x - x : x;
+}
+
+function setManoeuvreArrow(angleDeg, direction) {
+  const mirror = direction === 'left';
+  const theta = (Math.min(Math.abs(angleDeg), TURN_MAX_ANGLE) * Math.PI) / 180;
+  const control = { x: TURN_PIVOT.x, y: TURN_PIVOT.y - TURN_ARM };
+  const dir = { x: Math.sin(theta), y: -Math.cos(theta) };
+  const tip = { x: control.x + dir.x * TURN_ARM, y: control.y + dir.y * TURN_ARM };
+  const back = { x: -dir.x, y: -dir.y };
+  const rotate = (v, a) => ({
+    x: v.x * Math.cos(a) - v.y * Math.sin(a),
+    y: v.x * Math.sin(a) + v.y * Math.cos(a),
+  });
+  const w1 = rotate(back, TURN_HEAD_SPREAD);
+  const w2 = rotate(back, -TURN_HEAD_SPREAD);
+
+  const tipX = mirrorX(tip.x, mirror);
+  $('turnArm').setAttribute('d',
+    `M ${mirrorX(TURN_PIVOT.x, mirror)} ${TURN_STEM_Y} V ${TURN_PIVOT.y} Q ${mirrorX(control.x, mirror)} ${control.y} ${tipX.toFixed(2)} ${tip.y.toFixed(2)}`);
+  $('turnHead').setAttribute('d',
+    `M ${mirrorX(tip.x + w1.x * TURN_HEAD_LEN, mirror).toFixed(2)} ${(tip.y + w1.y * TURN_HEAD_LEN).toFixed(2)} ` +
+    `L ${tipX.toFixed(2)} ${tip.y.toFixed(2)} ` +
+    `L ${mirrorX(tip.x + w2.x * TURN_HEAD_LEN, mirror).toFixed(2)} ${(tip.y + w2.y * TURN_HEAD_LEN).toFixed(2)}`);
+}
+
+// Same near/far split as distance() above, but returned as separate
+// value/unit parts (for the manoeuvre card's two-span layout) and with a
+// near-range unit of its own (feet, not miles) under imperial — a close
+// turn is exactly the number a driver glances at most, so it can't be the
+// one distance in the app that stays metric regardless of the setting.
+function turnDistanceParts(metres) {
+  if (prefs.imperial) {
+    const ft = metres * FT_PER_METRE;
+    if (ft < 1000) return { value: String(Math.round(ft)), unit: 'ft' };
+    const mi = metres / 1000 / KM_PER_MILE;
+    return { value: mi < 10 ? mi.toFixed(1) : String(Math.round(mi)), unit: 'mi' };
+  }
+  if (metres < 1000) return { value: String(Math.round(metres)), unit: 'm' };
+  const km = metres / 1000;
+  return { value: km < 10 ? km.toFixed(1) : String(Math.round(km)), unit: 'km' };
+}
+
+function updateManoeuvre(t) {
+  const card = $('manoeuvre');
+  if (!route || !route.points?.length) {
+    card.classList.remove('on', 'arrived');
+    $('thenPreview').classList.remove('on');
+    return;
+  }
+
+  while (route.manoeuvres?.length) {
+    const next = route.manoeuvres[0];
+    const d = Math.hypot(t.truck.x - next.x, t.truck.z - next.z);
+    if (d < PASSED_METRES) {
+      route.manoeuvres.shift();
+      continue;
+    }
+    card.classList.add('on');
+    card.classList.remove('arrived');
+    const nextParts = turnDistanceParts(d);
+    $('turnDist').textContent = nextParts.value;
+    $('turnUnit').textContent = nextParts.unit;
+    $('turnRoad').textContent = `Turn ${next.direction}`;
+    setManoeuvreArrow(next.angle, next.direction);
+
+    // A preview of the turn after this one — distance is from this turn's
+    // own point to the next one's, not from the truck, since that's the
+    // "then, in N more" reading a driver actually wants once they've
+    // pictured making the first turn.
+    const then = route.manoeuvres[1];
+    const thenEl = $('thenPreview');
+    if (then) {
+      const thenD = Math.hypot(then.x - next.x, then.z - next.z);
+      const thenParts = turnDistanceParts(thenD);
+      thenEl.textContent = `Then ${then.direction === 'left' ? '↰' : '↱'} ${thenParts.value}${thenParts.unit}`;
+      thenEl.classList.add('on');
+    } else {
+      thenEl.classList.remove('on');
+    }
+    return;
+  }
+  $('thenPreview').classList.remove('on');
+
+  // No turns left — either the route never had one (a straight shot) or
+  // they've all been passed. Rather than the card going blank for the rest
+  // of the trip, show progress toward the destination itself, then a
+  // distinct arrival state once you're actually there.
+  const dest = route.points[route.points.length - 1];
+  const dFinal = Math.hypot(t.truck.x - dest.x, t.truck.z - dest.z);
+
+  if (dFinal < ARRIVED_METRES) {
+    card.classList.add('on', 'arrived');
+    $('turnRoad').textContent = 'Arrived';
+    return;
+  }
+
+  card.classList.add('on');
+  card.classList.remove('arrived');
+  const finalParts = turnDistanceParts(dFinal);
+  $('turnDist').textContent = finalParts.value;
+  $('turnUnit').textContent = finalParts.unit;
+  $('turnRoad').textContent = 'Continue straight';
+  setManoeuvreArrow(0, 'right');
+}
 
 // ---------------------------------------------------------------------------
 // Telemetry stream

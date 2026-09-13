@@ -426,7 +426,7 @@ async function requestHandler(req, res) {
 
   if (url.pathname === '/api/status') {
     return json(res, 200, {
-      version: '2.13.1',
+      version: '2.14.0',
       source: state.source,
       connected: state.connected,
       game: state.game,
@@ -584,7 +584,7 @@ function localAddresses() {
     // With --port 0 the OS assigns the real port, so read it back rather
     // than printing the literal 0 that was passed in.
     const boundPort = server.address().port;
-    console.log('\n  Rig Radar 2.13.1\n');
+    console.log('\n  Rig Radar 2.14.0\n');
     for (const addr of localAddresses()) {
       console.log(`  Open on your phone:  http://${addr}:${boundPort}`);
     }

@@ -4,6 +4,25 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.14.0** — Restored the turn-by-turn card, on request after comparing
+against TruckNav (a related open-source ETS2/ATS GPS — same map parser,
+same telemetry plugin). Its own screenshots turned out to be flat 2D with
+no tilt, so the actual gap wasn't 3D rendering; it was UI polish, and a
+turn-by-turn card was the first specific piece asked for.
+
+- **Same design pulled back from git history** (`e3a0703^`, the pre-2.10.0
+  revision) as the 2.12.0 gauge restoration used — exact arrow-drawing
+  math, distance/"then" preview layout, and the short-viewport compact
+  sizing that keeps it from overlapping the gear gauge.
+- **Same known tradeoff as before its 2.11.0 removal, unchanged**: this
+  card's route is Rig Radar's own independently-computed path (Dijkstra
+  over the compiled map graph), not anything the game itself exposes, so
+  it can disagree with the game's own GPS with no telemetry field to
+  arbitrate which is right. Restored anyway, on an explicit, informed
+  request.
+- Verified live at normal and short-viewport (390×420) sizes — card and
+  gauges render without overlap in both.
+
 **2.13.1** — Two live phone reports once the Netlify install was actually
 working: dragging the map felt "very sticky," and the tilt didn't feel as
 3D as TruckSim GPS.
