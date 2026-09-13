@@ -461,7 +461,8 @@
       <input class="field" id="apiBaseInput" style="margin-bottom:0"
         placeholder="e.g. https://192.168.0.x:3443 — leave blank otherwise">
     </div>
-    <div class="row"><span>Version</span><b id="versionVal">—</b></div>
+    <div class="row"><span>App version</span><b id="appVersionVal">—</b></div>
+    <div class="row"><span>Server version</span><b id="versionVal">—</b></div>
     <div class="row"><span>Close</span><button class="round" data-close aria-label="Close">
       <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
   </div>
@@ -485,6 +486,17 @@ function readApiBase() {
 }
 let apiBase = readApiBase().replace(/\/$/, '');
 function apiUrl(path) { return apiBase + path; }
+
+// Which build of *this page* is loaded — separate from the server's own
+// version below, and easy to conflate with it since both are just a
+// number in Settings. They can genuinely disagree: this page may be
+// served from Netlify while apiBase points at a PC server on a different
+// release, or a stale service-worker cache may be showing an old build
+// of the page against a freshly-updated server. Bump this by hand on
+// every shell change — there's no server round-trip to derive it from,
+// since the whole point is telling the two apart when they can't reach
+// each other yet.
+const SHELL_VERSION = '2.14.1';
 
 // ---------------------------------------------------------------------------
 // Preferences
@@ -1896,8 +1908,9 @@ connect();
 requestAnimationFrame(tick);
 
 $('serverVal').textContent = location.host;
-// Read from the server rather than hardcoding a second copy of the version
-// string here — the two had already drifted out of sync once.
+$('appVersionVal').textContent = SHELL_VERSION;
+// Read from the server rather than hardcoding a second copy of *its*
+// version string here — the two had already drifted out of sync once.
 fetch(apiUrl('/api/status')).then((r) => r.json()).then((s) => {
   $('versionVal').textContent = s.version;
 }).catch(() => {});

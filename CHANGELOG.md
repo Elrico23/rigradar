@@ -4,6 +4,17 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.14.1** — Added a shell-side "App version" to Settings, distinct from
+the existing "Server version". They'd been shown as one ambiguous
+"Version" field, but they can genuinely disagree — this page can be
+served from Netlify while pointed at a PC server on a different release,
+which is exactly what happened while confirming the turn-by-turn card's
+rollout: the phone read 2.15.0 (the PC's server) with no way to tell
+whether the *page itself* had actually updated. `SHELL_VERSION` is a
+plain constant baked into the page, bumped by hand on every shell change
+— there's no server round-trip to derive it from, since telling the two
+apart is exactly the point when they can't yet reach each other.
+
 **2.14.0** — Restored the turn-by-turn card, on request after comparing
 against TruckNav (a related open-source ETS2/ATS GPS — same map parser,
 same telemetry plugin). Its own screenshots turned out to be flat 2D with
