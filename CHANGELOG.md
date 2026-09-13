@@ -4,6 +4,21 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.14.2** — Added a destination pin: a green map-pin teardrop at the
+route's endpoint, on request after a TruckSim GPS comparison screenshot
+showed one. Distinct from the plain dot every company gets, and drawn
+after the horizon fade (unlike roads/labels) so it stays sharp regardless
+of distance, the same way the truck marker does.
+
+Verified with a synthetic route (temporarily overriding `route` in the
+console) rather than live traffic, since testing surfaced a separate,
+real finding: the actual live job's destination ("Zvolen — GNT") isn't
+in the compiled ETS2 map at all — confirmed zero matches in
+`data/ets2/search-index.json` — so auto-routing correctly can't draw a
+route for it, pin included. Root cause is a data-coverage gap (that
+city's DLC region likely wasn't included in the original Phase 2 parse),
+not a code bug; fixing it needs a re-parse, deliberately not done yet.
+
 **2.14.1** — Added a shell-side "App version" to Settings, distinct from
 the existing "Server version". They'd been shown as one ambiguous
 "Version" field, but they can genuinely disagree — this page can be

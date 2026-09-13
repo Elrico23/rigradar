@@ -496,7 +496,7 @@ function apiUrl(path) { return apiBase + path; }
 // every shell change — there's no server round-trip to derive it from,
 // since the whole point is telling the two apart when they can't reach
 // each other yet.
-const SHELL_VERSION = '2.14.1';
+const SHELL_VERSION = '2.14.2';
 
 // ---------------------------------------------------------------------------
 // Preferences
@@ -1318,6 +1318,44 @@ function drawTruck() {
   ctx.restore();
 }
 
+/** A classic map-pin teardrop at the destination — distinct from the plain
+ * dot every company gets, since this is the one point on the route that
+ * actually matters most: where the trip ends. Green, matching the
+ * "arrived" state already used elsewhere, not the route's own blue or the
+ * truck's teal, so it never reads as either of those at a glance. */
+function drawDestinationPin() {
+  if (!route || !route.points?.length) return;
+  const dest = route.points[route.points.length - 1];
+  const [px, py] = project(dest.x, dest.z);
+
+  ctx.save();
+  ctx.translate(px, py);
+
+  ctx.beginPath();
+  ctx.arc(0, -18, 16, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(111,191,115,.18)';
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.quadraticCurveTo(-9, -13, -8, -21);
+  ctx.arc(0, -21, 8, Math.PI, 0, false);
+  ctx.quadraticCurveTo(9, -13, 0, 0);
+  ctx.closePath();
+  ctx.fillStyle = '#6fbf73';
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#0a0e14';
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.arc(0, -21, 3, 0, Math.PI * 2);
+  ctx.fillStyle = '#0a0e14';
+  ctx.fill();
+
+  ctx.restore();
+}
+
 // Atmospheric-perspective haze toward the horizon — real depth cue a flat
 // top-down map has no reason to have, but a forward-tilted one reads as
 // noticeably flatter without it, since the perspective compression alone
@@ -1353,6 +1391,7 @@ function render() {
   drawSigns();
   drawLabels();
   drawHorizonFade();
+  drawDestinationPin();
   drawTruck();
 }
 
