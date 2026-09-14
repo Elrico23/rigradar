@@ -4,6 +4,70 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.16.1** — Fixed company-name labels turning into a wall of overlapping
+text at dense industrial/depot clusters, flagged with a screenshot next
+to the base game's own in-dash GPS (which marks a cluster like that with
+plain icons, not by spelling out every name).
+
+- `drawLabels()`'s company pass used to skip a company entirely — badge
+  and all — whenever its name-label collided with an already-placed one.
+  In a tight cluster of several companies a few metres apart, that meant
+  most of them vanished outright rather than just losing their name, and
+  the ones that *did* get a name printed crammed in close enough to read
+  as overlapping clutter anyway.
+- **Badge now draws unconditionally for every company in view**, before
+  the name-collision check — a plain dot still marks "something's here"
+  even when its name doesn't fit. The text-collision logic is otherwise
+  unchanged: nearest-first, skip a name that would overlap an
+  already-placed one.
+- Verified with a synthetic 7-company cluster (a few metres apart,
+  recentred the camera on it directly): all 7 badges rendered, only the
+  nearest got a visible name, the rest correctly skipped rather than
+  vanishing. No console errors.
+
+**2.16.0** — Five more gaps closed against TruckSim GPS from two direct
+live side-by-sides at the same in-game spot (own phone screenshot next to
+a fresh TruckSim screenshot, same job, same location) — the most direct
+comparison this ongoing effort has had, replacing both App-Store-sampled
+guesses and single-reference-photo assumptions where the two disagreed.
+
+- **Fuel gauge rebuilt as a real needle dial** (E/F labels, tick marks, a
+  red needle) instead of the ring-arc language gear/speed still use.
+  2.14.3 deliberately avoided this for "one gauge language across all
+  three"; overridden now on an explicit, repeated, photo-backed request —
+  gear and speed keep their rings, nothing in the new photos argued
+  against those specifically. Needle sweep (`FUEL_EMPTY_DEG`/
+  `FUEL_FULL_DEG`, -140°/10°) is a hand-read calibration off the one data
+  point available (a known fuel level, an observed needle angle), not a
+  derived spec — same category of constant as `TILT_STRENGTH`.
+- **Truck marker gained a white outline ring** — visible clearly on the
+  new photos in a way the App Store screenshots this marker's colour was
+  sampled from (2.15.3) didn't show.
+- **On-map turn chevron roughly doubled in stroke weight** (7/3.6px
+  casing/fill to 12/7) so it reads as the bold, chunky, near-solid shape
+  TruckSim's own chevron is, instead of a thin double-stroked line. Still
+  a stroked path with round joins/caps, not a rebuilt filled polygon —
+  cheaper, and looks right at this weight.
+- **Turn-by-turn card mirrored**: icon now sits to the right of the
+  distance text, not the left, matching both new photos. Card padding
+  swapped left/right to match.
+- **Default zoom tightened** — idle floor 1.6 → 1.0, tilt multiplier
+  0.15 → 0.11 — after the same stopped-truck comparison showed TruckSim
+  sitting noticeably closer even at 0 km/h. Another hand-tuned-against-a-
+  photo constant, continuing the same 0.5x → 0.32x → 0.22x → 0.15x
+  progression this value has had before.
+- **Deliberately not done**: TruckSim's lane-guidance strip (three small
+  arrow icons under the main turn card) and its multi-waypoint numbered
+  pins — both real features, not a colour/shape/sizing detail, out of
+  scope for this pass.
+- Verified live: reloaded past a stale service-worker cache (same
+  lesson as 2.15.5) to confirm the real build was running, then — since
+  the live job's destination still isn't in the compiled map, so no real
+  route was available to check against — placed a synthetic route and
+  manoeuvre 150m ahead of the real, live truck position to confirm the
+  card layout and chevron render correctly. Truck marker and zoom
+  confirmed directly against live (routeless) driving. No console errors.
+
 **2.15.5** — Fixed the visited-road trail rendering as broken/patchy
 segments at interchanges, reported live with a phone screenshot at a
 cloverleaf (on/off ramps and a divided highway's opposite carriageway
