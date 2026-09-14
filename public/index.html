@@ -529,7 +529,7 @@ function apiUrl(path) { return apiBase + path; }
 // every shell change — there's no server round-trip to derive it from,
 // since the whole point is telling the two apart when they can't reach
 // each other yet.
-const SHELL_VERSION = '2.15.3';
+const SHELL_VERSION = '2.15.5';
 
 // ---------------------------------------------------------------------------
 // Preferences
@@ -932,13 +932,16 @@ function backgroundFill() {
 
 function drawGrid() {
   // Until real road geometry is compiled, a kilometre grid gives the map
-  // honest motion and scale rather than faking roads that are not there.
-  // Never actually gated on that condition until now, so it drew under a
-  // fully-compiled real map on every frame regardless — permanently
-  // showing placeholder graph-paper behind 218k+ real roads instead of
-  // stepping aside once they exist, reported as looking stuck "in build
-  // mode".
-  if (telemetry && telemetry.mapReady) return;
+  // honest motion and scale rather than faking roads that are not there —
+  // but only once there's actually a "no map compiled" state to explain.
+  // Previously drawn whenever telemetry was merely null too (the plain
+  // "Connecting" screen, before any telemetry has arrived at all, game and
+  // mapReady both unknown), which put an explanation-free grid behind the
+  // connecting pill on request after that read as debug/placeholder
+  // graph-paper rather than a deliberate loading state. Same gate as
+  // drawEmptyState() now, so the grid and its "No map compiled yet" text
+  // only ever appear together, not one without the other.
+  if (!telemetry || telemetry.mapReady) return;
   const step = 1000;
   const reach = Math.max(W, H) * view.metresPerPixel * 1.6;
   const x0 = Math.floor((view.centre.x - reach) / step) * step;
@@ -1061,6 +1064,20 @@ function markVisited(game, x, z) {
   }
 }
 
+// How close a road's own sample point has to be to the truck's live
+// position to count as "this is the road under the truck right now", as
+// opposed to VISITED_CELL_METRES (300) — the grid's cell size, tuned for
+// how coarsely driving history gets remembered, not for telling one road
+// apart from another nearby one. At a real interchange an on-ramp or the
+// opposite carriageway of a divided highway routinely passes within 300m
+// of the mainline the truck is actually on, so using the cell size here
+// was lighting up roads never driven, in a patchwork that looked like
+// "broken" road segments rather than one continuous trail (reported live,
+// screenshotted at a cloverleaf interchange). 30m matches the same
+// close-enough-to-count-as-here scale already used elsewhere in this file
+// (PASSED_METRES) rather than the grid's own much coarser one.
+const VISITED_LIVE_RADIUS_METRES = 30;
+
 // Sampling the two endpoints and the midpoint, rather than every point in
 // the segment, keeps this cheap across a viewport that can hold thousands
 // of road segments per frame.
@@ -1085,7 +1102,7 @@ function isRoadVisited(pts) {
   if (telemetry?.truck && telemetry.game === game) {
     const tx = telemetry.truck.x, tz = telemetry.truck.z;
     for (let i = 0; i < 3; i++) {
-      if (Math.hypot(sampleX[i] - tx, sampleZ[i] - tz) < VISITED_CELL_METRES) return true;
+      if (Math.hypot(sampleX[i] - tx, sampleZ[i] - tz) < VISITED_LIVE_RADIUS_METRES) return true;
     }
   }
   return false;

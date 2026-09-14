@@ -4,6 +4,67 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.15.5** — Fixed the visited-road trail rendering as broken/patchy
+segments at interchanges, reported live with a phone screenshot at a
+cloverleaf (on/off ramps and a divided highway's opposite carriageway
+showing as disconnected yellow dashes instead of one continuous trail
+behind the truck).
+
+- **Root cause, confirmed with an isolated synthetic test against the
+  live server before touching any code**: `isRoadVisited()`'s live
+  fallback (added in 2.11.2, to stop the trail lagging behind the truck
+  on a long segment it's only partway along) checked distance from a
+  road's sample points to the truck using `VISITED_CELL_METRES` — 300m,
+  the *grid cell's* size, not a "is this actually my road" distance. At
+  a real interchange, an on-ramp or the opposite carriageway of a divided
+  highway routinely sits within 300m of the mainline, so it was getting
+  marked visited too, purely for being nearby — never for being driven.
+  Reproduced directly: built three synthetic roads (0m/60m/120m from a
+  fake truck position) and confirmed the 60m and 120m ones both read
+  `visited: true` under the old code.
+- **New `VISITED_LIVE_RADIUS_METRES` (30)**, separate from
+  `VISITED_CELL_METRES`, used only for that live fallback check — matches
+  the same close-enough-to-count-as-here scale already used elsewhere in
+  this file (`PASSED_METRES`) instead of the grid's much coarser one.
+  Re-ran the same synthetic test after the change: the truck's own road
+  (0m) still reads visited immediately (the 2.11.2 gap stays fixed), the
+  60m and 120m roads no longer do.
+- Hit and worked around a stale-service-worker read while testing this
+  locally (a reload kept running the pre-fix script even though the
+  server was already serving the new file) — not a bug, this is exactly
+  what 2.9.1-2.9.2's stale-while-revalidate fix does by design: the first
+  open after a deploy can still show the previous cached shell while it
+  refetches in the background, and the *next* open picks up the update.
+  Worth remembering next time a live check doesn't match the source
+  before assuming the fix didn't land.
+
+**2.15.4** — Dropped the placeholder kilometre grid from the plain
+"Connecting" screen, on request after it showed up on the live Netlify
+deploy with nothing to explain it.
+
+- `drawGrid()` was gated on `telemetry && telemetry.mapReady` — true only
+  once telemetry has actually arrived and doesn't have a ready map, so it
+  correctly skipped a fully-compiled map, but `null && anything` is also
+  falsy, meaning it drew the grid before any telemetry had arrived at
+  all too (`telemetry === null`, the ordinary first few seconds of
+  "Connecting", or indefinitely if the phone can never reach the
+  telemetry server at all — which is exactly what the live Netlify shell
+  hits, since it has no server of its own behind `/api/stream`). Nothing
+  else on screen explains what the grid means in that state, since
+  `drawEmptyState()`'s "No map compiled yet" text is gated on
+  `telemetry &&` (needs telemetry to exist), so the grid could show up
+  alone with no caption — read as leftover debug graph-paper, not a
+  deliberate loading state.
+- Now gated on the same condition as `drawEmptyState()` (`!telemetry ||
+  telemetry.mapReady`), so the grid and its explanation only ever appear
+  together — never the grid alone during an ordinary or indefinite
+  "Connecting" wait.
+- Verified live: closed the EventSource and cleared `telemetry` to force
+  the pre-connection state, confirmed the grid no longer draws in that
+  state (the same technique 2.10.1's grid-under-real-map bug writeup
+  used), then reloaded to confirm the ordinary demo-drive path is
+  unaffected.
+
 **2.15.3** — Closed the remaining colour/shape gaps against TruckSim GPS
 without a new side-by-side screenshot session: fetched the app's own
 current App Store listing directly and pixel-sampled its screenshots
