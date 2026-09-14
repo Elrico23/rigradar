@@ -4,6 +4,53 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.15.3** — Closed the remaining colour/shape gaps against TruckSim GPS
+without a new side-by-side screenshot session: fetched the app's own
+current App Store listing directly and pixel-sampled its screenshots
+(hue-bucketed the actual screenshot pixel data, not eyeballed) rather
+than asking for another round of manual comparisons.
+
+- **Truck marker recoloured teal → blue** (`#095ee0`, sampled consistently
+  across two separate screenshots, both averaging within 1 unit of each
+  other) and redrawn as a solid filled puck with a white directional
+  wedge inside, not a bare teal chevron. 2.12.0 had explicitly left this
+  alone — "the reference doesn't clearly show a truck marker to match
+  against, so there's no evidence to change those specifically" — this is
+  that evidence, now that it exists.
+- **Route line recoloured** from `#2e8fea` (a medium blue, picked in
+  2.12.0 from an older reference image) **to `#3ad6f5`**, a noticeably
+  brighter cyan — the single largest saturated colour cluster in the
+  sampled screenshots by a wide margin, consistent with it being a long,
+  thick, prominent line across most of the image.
+- **Facility icons (`drawFacilities`) reshaped from flat rounded-square
+  badges to teardrop pins** — TruckSim's own POI markers are teardrop
+  pins throughout every screenshot checked, never squares. Reuses the
+  same pin silhouette `drawDestinationPin` already draws for the
+  destination marker, just smaller (r=6.5 vs 8), so the map now has one
+  consistent pin family instead of two different marker shapes. Category
+  colours and pictograms (pump/bed/wrench/initial) are unchanged, only
+  the outline and the point they anchor to.
+- Deliberately left alone: the gauge cluster (gear/speed/fuel rings) —
+  nothing in the fetched screenshots contradicts the 2.12.0/2.14.3
+  decisions, which were themselves verified against a direct live
+  side-by-side, a higher bar than a marketing screenshot. Also left
+  alone: the multi-waypoint pin numbering and the POI category filter
+  bar TruckSim's screenshots show — those are whole features, not a
+  colour or shape detail, and out of scope for a look-matching pass.
+- **Found and fixed a real, unrelated bug while trying to test this
+  live**: `node server.js --demo` crashed outright
+  (`ERR_SOCKET_BAD_PORT`). `args[args.indexOf('--port') + 1]` returns
+  `args[0]` whenever `--port` isn't present (`indexOf` gives `-1`, and
+  `-1 + 1 = 0`) — so `--demo` itself was being read as the port string,
+  and `Number('--demo')` is `NaN`. Only looks up `args[i + 1]` now once
+  `--port` is confirmed present. Existed before this pass; just never hit
+  until demo mode was launched without an explicit `--port` alongside it.
+- Verified live: truck marker and route colour confirmed against the
+  real compiled ETS2 map during a demo drive; facility pins confirmed
+  with synthetic placements (all seven kinds, then a tight zoom on three)
+  after real ones didn't happen to be in view — same approach 2.15.0
+  used for the same reason. No console errors.
+
 **2.15.2** — Two corrections after live feedback on 2.15.1.
 
 - **The on-map chevron is properly bent now**, not a straight arrow

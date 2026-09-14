@@ -30,7 +30,13 @@ const DATA_DIR = path.join(ROOT, 'data');
 
 const args = process.argv.slice(2);
 const FORCE_DEMO = args.includes('--demo');
-const portArg = args[args.indexOf('--port') + 1];
+// indexOf returns -1 when --port is absent, and args[-1 + 1] = args[0] would
+// silently pick up whatever flag happens to be first (e.g. --demo) as the
+// port string instead of correctly finding nothing — Number('--demo') is
+// NaN, which server.listen() rejects outright. Only look up args[i + 1] once
+// --port is confirmed present.
+const portFlagIndex = args.indexOf('--port');
+const portArg = portFlagIndex === -1 ? undefined : args[portFlagIndex + 1];
 const PORT = portArg === undefined ? 3000 : Number(portArg);
 const TICK_MS = 66; // ~15 Hz to the phone
 
@@ -426,7 +432,7 @@ async function requestHandler(req, res) {
 
   if (url.pathname === '/api/status') {
     return json(res, 200, {
-      version: '2.15.0',
+      version: '2.15.3',
       source: state.source,
       connected: state.connected,
       game: state.game,
@@ -585,7 +591,7 @@ function localAddresses() {
     // With --port 0 the OS assigns the real port, so read it back rather
     // than printing the literal 0 that was passed in.
     const boundPort = server.address().port;
-    console.log('\n  Rig Radar 2.15.0\n');
+    console.log('\n  Rig Radar 2.15.3\n');
     for (const addr of localAddresses()) {
       console.log(`  Open on your phone:  http://${addr}:${boundPort}`);
     }
