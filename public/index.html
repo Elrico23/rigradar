@@ -549,7 +549,7 @@ function apiUrl(path) { return apiBase + path; }
 // every shell change — there's no server round-trip to derive it from,
 // since the whole point is telling the two apart when they can't reach
 // each other yet.
-const SHELL_VERSION = '2.16.1';
+const SHELL_VERSION = '2.17.1';
 
 // ---------------------------------------------------------------------------
 // Preferences
@@ -744,13 +744,32 @@ async function refreshGeo() {
   if (!moved) return;
 
   const halfSpan = (Math.max(W, H) * view.metresPerPixel) / 2 + 200;
-  const params = new URLSearchParams({
-    game: telemetry.game,
-    minX: view.centre.x - halfSpan,
-    maxX: view.centre.x + halfSpan,
-    minZ: view.centre.z - halfSpan,
-    maxZ: view.centre.z + halfSpan,
-  });
+  let minX = view.centre.x - halfSpan, maxX = view.centre.x + halfSpan;
+  let minZ = view.centre.z - halfSpan, maxZ = view.centre.z + halfSpan;
+
+  // Tilt mode compresses a much longer real-world lookahead into a short
+  // on-screen distance near the horizon (see project()), so a flat
+  // screen-height * metresPerPixel span badly under-fetches what's actually
+  // drawn near the top of the screen — roads there would visibly run out of
+  // fetched geometry and stop dead, well before the edge of the canvas.
+  // This finds the real-world "ahead" distance whose tilt-compressed screen
+  // position is 95% of the way to the asymptote tilt never actually reaches
+  // (see TILT_STRENGTH / project()), and extends the fetch box that far in
+  // the current heading's direction — the one direction that actually needs
+  // it, rather than ballooning the query in every direction.
+  if (prefs.tilt && prefs.headingUp) {
+    const k = TILT_STRENGTH / H;
+    const aheadMetres = (19 / k) * view.metresPerPixel; // 19 = 0.95 / (1 - 0.95)
+    const rot = -view.bearing * Math.PI / 180;
+    const aheadX = view.centre.x - Math.sin(rot) * aheadMetres;
+    const aheadZ = view.centre.z - Math.cos(rot) * aheadMetres;
+    minX = Math.min(minX, aheadX - 300);
+    maxX = Math.max(maxX, aheadX + 300);
+    minZ = Math.min(minZ, aheadZ - 300);
+    maxZ = Math.max(maxZ, aheadZ + 300);
+  }
+
+  const params = new URLSearchParams({ game: telemetry.game, minX, maxX, minZ, maxZ });
 
   geoInFlight = true;
   lastGeoCentre = { x: view.centre.x, z: view.centre.z };

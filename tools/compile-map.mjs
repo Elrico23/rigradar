@@ -49,8 +49,10 @@ console.log(`\nCompiling ${GAME} from ${INPUT_DIR}\n`);
 const roadLooks = readJson('roadLooks');
 const roads = readJson('roads');
 const prefabs = readJson('prefabs');
+const prefabDescriptions = readJson('prefabDescriptions');
 
 const roadLookByToken = new Map(roadLooks.map((r) => [r.token, r]));
+const prefabDescByToken = new Map(prefabDescriptions.map((d) => [d.token, d]));
 
 /** Road class from lane count: more lanes reads as a bigger road on screen. */
 function classify(roadLookToken) {
@@ -82,8 +84,12 @@ const rawNodes = JSON.parse(readFileSync(join(INPUT_DIR, `${PREFIX}-nodes.json`)
 console.log(`${rawNodes.length} records`);
 
 const nodePos = new Map(); // uid -> {x, z}
+const nodeRot = new Map(); // uid -> rotation (radians) — needed to place prefab interiors, below
 for (const n of rawNodes) {
-  if (neededNodes.has(n.uid)) nodePos.set(n.uid, { x: n.x, z: n.y });
+  if (neededNodes.has(n.uid)) {
+    nodePos.set(n.uid, { x: n.x, z: n.y });
+    nodeRot.set(n.uid, n.rotation);
+  }
 }
 console.log(`  matched ${nodePos.size} of ${neededNodes.size} referenced nodes`);
 rawNodes.length = 0; // let the rest be collected before the next big read
@@ -194,6 +200,74 @@ roads.forEach((r, i) => {
 });
 if (missing) console.log(`  ⚠ ${missing} road pieces had a missing endpoint node — skipped`);
 console.log(`  ${segments.length} road segments compiled (${smoothed} smoothed as curves)`);
+
+// ---------------------------------------------------------------------------
+// 3b. Prefab interiors. A prefab (interchange, gas station, weigh station,
+//     parking lot...) has its own internal road network, described in
+//     prefabDescriptions in the prefab's own local coordinate space. Until
+//     now nothing read that — only a prefab's boundary nodes were kept, for
+//     routing connectivity (section 4) — so every interchange or lot drew as
+//     a few disconnected straight stubs with nothing joining them up, which
+//     is exactly what a live side-by-side against TruckSim's own GPS showed.
+//
+//     World placement mirrors truckermudgeon/maps' own toMapPosition
+//     (packages/libs/map/prefabs.ts): anchor on nodeUids[0]'s world
+//     position/rotation, offset by the description's own node at
+//     originNodeIndex. Deliberately nodeUids[0], not
+//     nodeUids[originNodeIndex] — matching that proven implementation
+//     rather than the more "obvious" pairing.
+// ---------------------------------------------------------------------------
+
+/** Road class from a prefab mapPoint's own lane counts — classify() above
+ * keys off a roadLookToken, which prefab-interior points don't have. */
+function classifyLanes(left, right) {
+  const lanes = (typeof left === 'number' ? left : 0) + (typeof right === 'number' ? right : 0);
+  if (lanes >= 4) return 0;
+  if (lanes >= 2) return 1;
+  return 2;
+}
+
+let prefabsPlaced = 0, prefabsSkipped = 0, prefabSegments = 0;
+
+for (const p of prefabs) {
+  const desc = prefabDescByToken.get(p.token);
+  const anchorUid = p.nodeUids?.[0];
+  const anchorPos = anchorUid && nodePos.get(anchorUid);
+  const anchorRot = anchorUid ? nodeRot.get(anchorUid) : undefined;
+  const originLocal = desc?.nodes?.[p.originNodeIndex];
+  if (!desc || !anchorPos || anchorRot === undefined || !originLocal) {
+    prefabsSkipped++;
+    continue;
+  }
+
+  const theta = anchorRot - originLocal.rotation;
+  const cos = Math.cos(theta), sin = Math.sin(theta);
+  const toWorld = (lx, ly) => {
+    const dx = lx - originLocal.x;
+    const dy = ly - originLocal.y;
+    return { x: anchorPos.x + dx * cos - dy * sin, z: anchorPos.z + dx * sin + dy * cos };
+  };
+
+  const seenPairs = new Set();
+  const mapPoints = desc.mapPoints || [];
+  for (let i = 0; i < mapPoints.length; i++) {
+    const point = mapPoints[i];
+    if (point.type !== 'road') continue;
+    for (const j of point.neighbors) {
+      const key = i < j ? `${i},${j}` : `${j},${i}`;
+      if (seenPairs.has(key)) continue;
+      seenPairs.add(key);
+      const neighbour = mapPoints[j];
+      if (!neighbour || neighbour.type !== 'road') continue;
+      const a = toWorld(point.x, point.y);
+      const b = toWorld(neighbour.x, neighbour.y);
+      segments.push({ cls: classifyLanes(point.lanesLeft, point.lanesRight), pts: [a.x, a.z, b.x, b.z] });
+      prefabSegments++;
+    }
+  }
+  prefabsPlaced++;
+}
+console.log(`  prefab interiors: ${prefabsPlaced} placed (${prefabSegments} segments added), ${prefabsSkipped} skipped (no description/anchor match)`);
 
 writeFileSync(join(OUT_DIR, 'roads.bin'), encodeRoads(segments));
 
