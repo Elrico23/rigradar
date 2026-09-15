@@ -551,7 +551,7 @@ function apiUrl(path) { return apiBase + path; }
 // every shell change — there's no server round-trip to derive it from,
 // since the whole point is telling the two apart when they can't reach
 // each other yet.
-const SHELL_VERSION = '2.19.2';
+const SHELL_VERSION = '2.20.0';
 
 // ---------------------------------------------------------------------------
 // Preferences
@@ -902,6 +902,17 @@ const anchorY = () => {
  * always worked. */
 const TILT_STRENGTH = 1.8;
 
+// A real 3D GPS view doesn't just push distant things toward the horizon —
+// it draws them smaller, which is the actual cue that reads as "3D" rather
+// than "top-down with squashed positions". project()'s third return value
+// is that same depth scale it already computes for narrowing the X-offset
+// toward a vanishing point; anything drawn at a fixed size regardless of
+// distance (icons, shields, road width) is what made the whole view read
+// as flat, and let a cluster of distant facility icons overlap into a mess
+// instead of shrinking apart the way real perspective would. Floored well
+// above 0 so a far-away icon stays legible/tappable rather than vanishing.
+const DEPTH_SCALE_FLOOR = 0.4;
+
 function project(x, z) {
   const dx = x - view.centre.x;
   const dz = z - view.centre.z;
@@ -915,13 +926,14 @@ function project(x, z) {
   const linearAhead = -(rz / view.metresPerPixel); // positive = ahead of the truck
 
   if (!prefs.tilt || !prefs.headingUp || linearAhead <= 0) {
-    return [W / 2 + linearX, anchorY() - linearAhead];
+    return [W / 2 + linearX, anchorY() - linearAhead, 1];
   }
 
   const k = TILT_STRENGTH / H;
   const compressed = linearAhead / (1 + k * linearAhead);
   const scale = 1 / (1 + k * linearAhead * 0.9);
-  return [W / 2 + linearX * scale, anchorY() - compressed];
+  const depthScale = Math.max(DEPTH_SCALE_FLOOR, scale);
+  return [W / 2 + linearX * scale, anchorY() - compressed, depthScale];
 }
 
 // Traces a projected polyline onto the current path (moveTo the first point,
@@ -1124,6 +1136,24 @@ function roadFillWidthPx(cls) {
   return Math.min(ROAD_WIDTH_MAX_PX, Math.max(ROAD_WIDTH_MIN_PX, raw));
 }
 
+// Perspective foreshortening for roads and the route line: a real 3D GPS
+// view draws a distant stretch of road thinner, not just further up the
+// screen. A true per-pixel taper would mean stroking every short segment
+// on its own — instead this sorts segments into a handful of depth bands
+// by their own project()-computed depth scale and strokes each band once
+// at that band's width, which reads as a road narrowing into the distance
+// for a bounded number of stroke() calls per frame rather than thousands.
+const ROAD_DEPTH_BUCKETS = 4;
+
+function depthBucketOf(depthScale) {
+  const t = (1 - depthScale) / (1 - DEPTH_SCALE_FLOOR); // 0 = nearest, 1 = at the depth floor
+  return Math.min(ROAD_DEPTH_BUCKETS - 1, Math.floor(t * ROAD_DEPTH_BUCKETS));
+}
+
+function depthBucketScale(bucket) {
+  return 1 - (bucket / (ROAD_DEPTH_BUCKETS - 1)) * (1 - DEPTH_SCALE_FLOOR);
+}
+
 // Roads have no persistent per-segment ID in the compiled format (they're
 // anonymous point arrays, not addressable) — so "visited" is approximated
 // by a coordinate grid the truck's own position marks off as it drives,
@@ -1215,33 +1245,49 @@ function drawRoads() {
   if (!roads.length) return;
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
+
+  // Bucketed once per frame by class and depth band, rather than filtering
+  // the whole `roads` array again for every (class, bucket, layer)
+  // combination below.
+  const buckets = new Map(); // `${cls}:${bucket}` -> lines[]
+  for (const line of roads) {
+    if (line.pts.length < 4) continue;
+    const mi = Math.floor(line.pts.length / 4) * 2; // an even index near the segment's middle
+    const [, , depthScale] = project(line.pts[mi], line.pts[mi + 1]);
+    const key = `${line.cls}:${depthBucketOf(depthScale)}`;
+    let list = buckets.get(key);
+    if (!list) buckets.set(key, (list = []));
+    list.push(line);
+  }
+
   for (const style of ROAD_STYLE_ORDER) {
-    const fillW = roadFillWidthPx(style.cls);
-    ctx.lineWidth = fillW + ROAD_CASING_MARGIN_PX;
-    ctx.strokeStyle = style.casing;
-    ctx.beginPath();
-    for (const line of roads) {
-      if (line.cls !== style.cls || line.pts.length < 4) continue;
-      traceFlatPolyline(line.pts);
-    }
-    ctx.stroke();
+    for (let b = 0; b < ROAD_DEPTH_BUCKETS; b++) {
+      const lines = buckets.get(`${style.cls}:${b}`);
+      if (!lines) continue;
+      const bucketScale = depthBucketScale(b);
+      const fillW = roadFillWidthPx(style.cls) * bucketScale;
 
-    ctx.lineWidth = fillW;
-    ctx.strokeStyle = style.fill;
-    ctx.beginPath();
-    for (const line of roads) {
-      if (line.cls !== style.cls || line.pts.length < 4 || isRoadVisited(line.pts)) continue;
-      traceFlatPolyline(line.pts);
-    }
-    ctx.stroke();
+      ctx.lineWidth = fillW + ROAD_CASING_MARGIN_PX * bucketScale;
+      ctx.strokeStyle = style.casing;
+      ctx.beginPath();
+      for (const line of lines) traceFlatPolyline(line.pts);
+      ctx.stroke();
 
-    ctx.strokeStyle = style.vFill;
-    ctx.beginPath();
-    for (const line of roads) {
-      if (line.cls !== style.cls || line.pts.length < 4 || !isRoadVisited(line.pts)) continue;
-      traceFlatPolyline(line.pts);
+      ctx.lineWidth = fillW;
+      ctx.strokeStyle = style.fill;
+      ctx.beginPath();
+      for (const line of lines) {
+        if (!isRoadVisited(line.pts)) traceFlatPolyline(line.pts);
+      }
+      ctx.stroke();
+
+      ctx.strokeStyle = style.vFill;
+      ctx.beginPath();
+      for (const line of lines) {
+        if (isRoadVisited(line.pts)) traceFlatPolyline(line.pts);
+      }
+      ctx.stroke();
     }
-    ctx.stroke();
   }
 }
 
@@ -1267,16 +1313,39 @@ function drawRoute() {
   // now uses (rather than a fixed 20/13px), so that margin holds at every
   // zoom instead of only the zoom level it was last tuned against.
   const motorwayCasingW = roadFillWidthPx(0) + ROAD_CASING_MARGIN_PX;
-  const routeCasingW = motorwayCasingW + 12.5;
+  const routeCasingWBase = motorwayCasingW + 12.5;
+
+  // The route is the single most prominent thing on screen — leaving it a
+  // constant width while drawRoads() tapers the road underneath it would
+  // undo most of the perspective read the road taper buys. Bucketed by
+  // each edge's own depth the same way drawRoads() buckets segments.
+  const buckets = Array.from({ length: ROAD_DEPTH_BUCKETS }, () => []);
+  for (let i = 0; i < route.points.length - 1; i++) {
+    const a = route.points[i], b = route.points[i + 1];
+    const [, , depthScale] = project((a.x + b.x) / 2, (a.z + b.z) / 2);
+    buckets[depthBucketOf(depthScale)].push([a, b]);
+  }
+
   // Plain solid fill, not a dashed centreline — matches TruckSim GPS's own
   // route line directly (a dashed stripe read as a texture the user didn't
   // want, on request after a direct comparison).
-  for (const [width, colour] of [[routeCasingW, 'rgba(10,14,20,.85)'], [routeCasingW - 7, '#3ad6f5']]) {
-    ctx.lineWidth = width;
-    ctx.strokeStyle = colour;
-    ctx.beginPath();
-    tracePointPolyline(route.points);
-    ctx.stroke();
+  for (let b = 0; b < ROAD_DEPTH_BUCKETS; b++) {
+    const edges = buckets[b];
+    if (!edges.length) continue;
+    const bucketScale = depthBucketScale(b);
+    const routeCasingW = routeCasingWBase * bucketScale;
+    for (const [width, colour] of [[routeCasingW, 'rgba(10,14,20,.85)'], [routeCasingW - 7 * bucketScale, '#3ad6f5']]) {
+      ctx.lineWidth = width;
+      ctx.strokeStyle = colour;
+      ctx.beginPath();
+      for (const [a, b2] of edges) {
+        const [ax, ay] = project(a.x, a.z);
+        const [bx, by] = project(b2.x, b2.z);
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+      }
+      ctx.stroke();
+    }
   }
 }
 
@@ -1306,16 +1375,24 @@ function drawLabels() {
   // caching the order would freeze label priority to a stale camera
   // position.
   for (const c of labels.cities.sort(byDistance)) {
-    const [x, y] = project(c.x, c.z);
+    const [x, y, scale] = project(c.x, c.z);
+    // Measured at the base 13px font — ctx.scale below shrinks the marker
+    // and text together for a distant city, the same depth cue project()
+    // already applies to position, so a cluster of far-off names thins
+    // itself out visually instead of staying full-size and overlapping.
     const w = ctx.measureText(c.name).width;
-    const box = { x1: x - w / 2 - 2, x2: x + w / 2 + 2, y1: y - 21, y2: y + 4 };
+    const box = { x1: x - (w / 2 + 2) * scale, x2: x + (w / 2 + 2) * scale, y1: y - 21 * scale, y2: y + 4 * scale };
     if (overlaps(box)) continue;
     placed.push(box);
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
 
     // A small marker gives the label an anchor point to sit against,
     // rather than text floating in space with nothing to tie it down.
     ctx.beginPath();
-    ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+    ctx.arc(0, 0, 3.5, 0, Math.PI * 2);
     ctx.fillStyle = '#7ef0e0';
     ctx.fill();
     ctx.lineWidth = 1.5;
@@ -1325,8 +1402,9 @@ function drawLabels() {
     ctx.lineWidth = 3;
     ctx.strokeStyle = 'rgba(10,14,20,.8)';
     ctx.fillStyle = '#eef3f6';
-    ctx.strokeText(c.name, x, y - 8);
-    ctx.fillText(c.name, x, y - 8);
+    ctx.strokeText(c.name, 0, -8);
+    ctx.fillText(c.name, 0, -8);
+    ctx.restore();
   }
 
   // Company names would be clutter at any distance — only worth showing
@@ -1334,7 +1412,7 @@ function drawLabels() {
   if (view.metresPerPixel < 6) {
     ctx.font = '11px ' + FONT;
     for (const c of labels.companies.sort(byDistance)) {
-      const [x, y] = project(c.x, c.z);
+      const [x, y, scale] = project(c.x, c.z);
 
       // The badge draws unconditionally now, even when its name gets
       // skipped below — a dense industrial cluster (several companies a
@@ -1344,7 +1422,10 @@ function drawLabels() {
       // which marks a cluster like that with plain icons and doesn't try
       // to spell out every name either). One dot per company still says
       // "something's here"; the text is the part that doesn't scale.
-      drawCompanyBadge(x, y);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(scale, scale);
+      drawCompanyBadge();
 
       const w = ctx.measureText(c.name).width;
       // Offset down (matches the draw position below), same reasoning as
@@ -1352,15 +1433,19 @@ function drawLabels() {
       // keeps the two labels from printing on top of each other. The box
       // now starts at the badge's own top edge (y-7), not the text's,
       // since the badge is the taller of the two.
-      const box = { x1: x - Math.max(w / 2, 7) - 2, x2: x + Math.max(w / 2, 7) + 2, y1: y - 7, y2: y + 26 };
-      if (overlaps(box)) continue; // too close to an already-named company — the badge alone still marks it
+      const box = {
+        x1: x - (Math.max(w / 2, 7) + 2) * scale, x2: x + (Math.max(w / 2, 7) + 2) * scale,
+        y1: y - 7 * scale, y2: y + 26 * scale,
+      };
+      if (overlaps(box)) { ctx.restore(); continue; } // too close to an already-named company — the badge alone still marks it
       placed.push(box);
 
       ctx.lineWidth = 2.5;
       ctx.strokeStyle = 'rgba(10,14,20,.8)';
       ctx.fillStyle = 'rgba(238,243,246,.75)';
-      ctx.strokeText(c.name, x, y + 17);
-      ctx.fillText(c.name, x, y + 17);
+      ctx.strokeText(c.name, 0, 17);
+      ctx.fillText(c.name, 0, 17);
+      ctx.restore();
     }
   }
 }
@@ -1370,9 +1455,9 @@ function drawLabels() {
  * shop) to pick a bed/pump/wrench icon by by, so a single plain dot-in-ring
  * reads as "point of interest" at a glance without pretending to
  * distinguish types the data can't actually tell apart. */
-function drawCompanyBadge(x, y) {
+function drawCompanyBadge() {
   ctx.beginPath();
-  ctx.arc(x, y, 6, 0, Math.PI * 2);
+  ctx.arc(0, 0, 6, 0, Math.PI * 2);
   ctx.fillStyle = '#123832';
   ctx.fill();
   ctx.lineWidth = 1.6;
@@ -1380,7 +1465,7 @@ function drawCompanyBadge(x, y) {
   ctx.stroke();
 
   ctx.beginPath();
-  ctx.arc(x, y, 2.2, 0, Math.PI * 2);
+  ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
   ctx.fillStyle = '#7ef0e0';
   ctx.fill();
 }
@@ -1453,16 +1538,20 @@ function drawSigns() {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   for (const s of signs) {
-    const [x, y] = project(s.x, s.z);
+    const [x, y, scale] = project(s.x, s.z);
     const style = shieldStyle(s.label);
     // Real interstate signage shows only the route number ("5", "10"), not
     // the "I"/"A" prefix used elsewhere in this app to tell the category
     // apart — that distinction is already carried by the shield's own
     // colour and shape here, so repeating it inside would just be noise.
     const number = style.interstate ? s.label.replace(/^(IS|I|A)[\s-]*/i, '') : s.label;
+    // Measured at the shield's base (unscaled) size — ctx.scale below
+    // shrinks the whole shield, text included, to match how far away it
+    // is, rather than every shield reading the same size regardless of
+    // distance.
     const w = ctx.measureText(number).width + (style.interstate ? 14 : 10);
     const h = style.interstate ? Math.max(20, w * 0.85) : 18;
-    const x0 = x - w / 2, y0 = y - h / 2, x1 = x + w / 2, y1 = y + h / 2;
+    const x0 = x - (w / 2) * scale, y0 = y - (h / 2) * scale, x1 = x + (w / 2) * scale, y1 = y + (h / 2) * scale;
     // The shield is drawn on the canvas, which has no idea the zoom
     // buttons/compass/link pill sit on top of it as opaque HTML — a shield
     // that happens to project underneath one gets visually clipped by it,
@@ -1473,8 +1562,13 @@ function drawSigns() {
     // that without needing the canvas to know about DOM layout at all.
     if (overlapsReservedUI(x0, y0, x1, y1)) continue;
 
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+
     if (style.interstate) {
-      drawInterstateShield(x, y, w / 2, h / 2, number);
+      drawInterstateShield(0, 0, w / 2, h / 2, number);
+      ctx.restore();
       continue;
     }
 
@@ -1482,11 +1576,12 @@ function drawSigns() {
     ctx.strokeStyle = style.border;
     ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.roundRect(x0, y0, w, h, 4);
+    ctx.roundRect(-w / 2, -h / 2, w, h, 4);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = style.fg;
-    ctx.fillText(number, x, y + 1);
+    ctx.fillText(number, 0, 1);
+    ctx.restore();
   }
 }
 
@@ -1519,13 +1614,14 @@ function drawFacilities() {
     const color = FACILITY_COLORS[f.kind];
     if (!color) continue;
 
-    const [x, y] = project(f.x, f.z);
-    const x0 = x - FACILITY_PIN_R * 1.2, x1 = x + FACILITY_PIN_R * 1.2;
-    const y0 = y + headY - FACILITY_PIN_R, y1 = y + 2;
+    const [x, y, scale] = project(f.x, f.z);
+    const x0 = x - FACILITY_PIN_R * 1.2 * scale, x1 = x + FACILITY_PIN_R * 1.2 * scale;
+    const y0 = y + (headY - FACILITY_PIN_R) * scale, y1 = y + 2 * scale;
     if (overlapsReservedUI(x0, y0, x1, y1)) continue;
 
     ctx.save();
     ctx.translate(x, y);
+    ctx.scale(scale, scale);
 
     ctx.beginPath();
     ctx.moveTo(0, 0);
@@ -1695,8 +1791,8 @@ function drawManoeuvreArrow() {
   if (!route?.manoeuvres?.length) return;
   const m = route.manoeuvres[0];
   const anchor = nearestRoutePoint(m.x, m.z) || m;
-  const [x, y] = project(anchor.x, anchor.z);
-  if (overlapsReservedUI(x - 26, y - 26, x + 26, y + 26)) return;
+  const [x, y, scale] = project(anchor.x, anchor.z);
+  if (overlapsReservedUI(x - 26 * scale, y - 26 * scale, x + 26 * scale, y + 26 * scale)) return;
 
   // The stem points back along the heading *before* the turn — same as
   // the turn card's icon, where only the bent tip needs to show the turn
@@ -1722,6 +1818,7 @@ function drawManoeuvreArrow() {
 
   ctx.save();
   ctx.translate(x, y);
+  ctx.scale(scale, scale);
   ctx.rotate(rot);
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
@@ -1758,10 +1855,11 @@ function drawManoeuvreArrow() {
 function drawDestinationPin() {
   if (!route || !route.points?.length) return;
   const dest = route.points[route.points.length - 1];
-  const [px, py] = project(dest.x, dest.z);
+  const [px, py, scale] = project(dest.x, dest.z);
 
   ctx.save();
   ctx.translate(px, py);
+  ctx.scale(scale, scale);
 
   ctx.beginPath();
   ctx.arc(0, -18, 16, 0, Math.PI * 2);
