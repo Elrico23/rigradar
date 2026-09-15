@@ -496,6 +496,8 @@
       <button class="switch" id="optImperial" role="switch" aria-checked="false"></button></div>
     <div class="row"><span>Tilted view (needs Heading up)</span>
       <button class="switch" id="optTilt" role="switch" aria-checked="false"></button></div>
+    <div class="row"><span>Auto-update</span>
+      <button class="switch" id="optAutoUpdate" role="switch" aria-checked="true"></button></div>
     <div class="row"><span>Game time scale</span><b id="scaleVal">15×</b></div>
     <div class="row"><span>This page served from</span><b id="serverVal">—</b></div>
     <div class="row" style="flex-direction:column; align-items:stretch; gap:6px;">
@@ -549,7 +551,7 @@ function apiUrl(path) { return apiBase + path; }
 // every shell change — there's no server round-trip to derive it from,
 // since the whole point is telling the two apart when they can't reach
 // each other yet.
-const SHELL_VERSION = '2.17.1';
+const SHELL_VERSION = '2.18.1';
 
 // ---------------------------------------------------------------------------
 // Preferences
@@ -559,7 +561,7 @@ const SHELL_VERSION = '2.17.1';
 // ETS2/ATS's own in-dash GPS, which is a forward-tilted trailing view by
 // default — flat/north-up is the opt-out via Settings, not the baseline.
 const prefs = Object.assign(
-  { headingUp: true, autoZoom: true, wakeLock: false, imperial: false, tilt: true },
+  { headingUp: true, autoZoom: true, wakeLock: false, imperial: false, tilt: true, autoUpdate: true },
   readPrefs()
 );
 
@@ -1773,18 +1775,22 @@ function tick(now) {
       view.centre.z = lerp(view.centre.z, telemetry.truck.z, Math.min(1, dt * 8));
     }
     if (prefs.autoZoom) {
-      // Both the idle floor (1.6 -> 1.0) and the tilt multiplier (0.15 ->
-      // 0.11) pulled in on request after a live side-by-side at the same
-      // stopped spot showed TruckSim sitting noticeably closer by default
-      // than this was, even at 0 km/h — same kind of hand-tuned-against-a-
-      // photo constant as TILT_STRENGTH itself, not a derived value.
-      const base = 1.0 + Math.min(telemetry.truck.speed, 110) * 0.055;
+      // Both the idle floor (1.6 -> 1.0 -> 0.7) and the tilt multiplier
+      // (0.15 -> 0.11 -> 0.08) pulled in further still on request after a
+      // live side-by-side at the same stopped spot showed TruckSim sitting
+      // noticeably closer by default than this was, even at 0 km/h — same
+      // kind of hand-tuned-against-a-photo constant as TILT_STRENGTH itself,
+      // not a derived value. At the old 0.11 the fixed-size on-map chevron
+      // (drawManoeuvreArrow) also read as an illegible squiggle jammed
+      // against the truck puck, since it never scales with zoom — tightening
+      // the zoom is what actually fixes that, not resizing the chevron.
+      const base = 0.7 + Math.min(telemetry.truck.speed, 110) * 0.055;
       // Tilt is meant to read as a close, cockpit-mounted GPS looking down
       // the road, not the same top-down span with the horizon merely bent —
       // the perspective compression already buys back the lookahead
       // distance a wider flat view would otherwise need, so tilt pulls the
       // base zoom in closer rather than leaving it unchanged.
-      const target = (prefs.tilt && prefs.headingUp) ? base * 0.11 : base;
+      const target = (prefs.tilt && prefs.headingUp) ? base * 0.08 : base;
       view.metresPerPixel = lerp(view.metresPerPixel, target, Math.min(1, dt * 1.5));
     }
   }
@@ -2253,6 +2259,7 @@ const SWITCHES = {
   optWake: 'wakeLock',
   optImperial: 'imperial',
   optTilt: 'tilt',
+  optAutoUpdate: 'autoUpdate',
 };
 
 function syncSwitches() {
@@ -2267,6 +2274,7 @@ for (const [id, key] of Object.entries(SWITCHES)) {
     syncSwitches();
     savePrefs();
     if (key === 'wakeLock') applyWakeLock();
+    if (key === 'autoUpdate' && prefs.autoUpdate) checkForUpdate();
     if (telemetry) paint(telemetry);
   };
 }
@@ -2402,12 +2410,68 @@ connect();
 requestAnimationFrame(tick);
 
 $('serverVal').textContent = location.host;
-$('appVersionVal').textContent = SHELL_VERSION;
 // Read from the server rather than hardcoding a second copy of *its*
 // version string here — the two had already drifted out of sync once.
 fetch(apiUrl('/api/status')).then((r) => r.json()).then((s) => {
   $('versionVal').textContent = s.version;
 }).catch(() => {});
+
+// ---------------------------------------------------------------------------
+// Shell auto-update — sw.js deliberately never expires its own cache (see
+// its comment), so the page has no way to know a newer shell has shipped
+// until it asks directly. This never reloads out from under an active
+// drive: it only applies once the truck is stopped (or there's no live
+// game to interrupt), and Settings' toggle can turn the whole thing off.
+// ---------------------------------------------------------------------------
+
+let pendingUpdateVersion = null;
+
+function renderAppVersion() {
+  const el = $('appVersionVal');
+  if (pendingUpdateVersion) {
+    el.textContent = `${SHELL_VERSION} → ${pendingUpdateVersion} ready — tap to reload`;
+    el.style.color = 'var(--beacon)';
+    el.style.cursor = 'pointer';
+  } else {
+    el.textContent = SHELL_VERSION;
+    el.style.color = '';
+    el.style.cursor = '';
+  }
+}
+$('appVersionVal').onclick = () => { if (pendingUpdateVersion) location.reload(); };
+renderAppVersion();
+
+async function checkForUpdate() {
+  if (!prefs.autoUpdate || pendingUpdateVersion) return;
+  try {
+    const res = await fetch('./', { cache: 'no-store', headers: { 'X-Rig-Radar-Check': '1' } });
+    if (!res.ok) return;
+    const text = await res.text();
+    const m = text.match(/SHELL_VERSION\s*=\s*['"]([^'"]+)['"]/);
+    if (m && m[1] !== SHELL_VERSION) {
+      pendingUpdateVersion = m[1];
+      renderAppVersion();
+    }
+  } catch {
+    // Offline, or this is the local dev server rather than the deployed
+    // shell — either way, the next scheduled check retries.
+  }
+}
+
+/** Safe to reload without yanking the map out from under an active drive:
+ * stationary, or not actually tracking a live game (demo mode, disconnected). */
+function safeToApplyUpdate() {
+  return !telemetry?.connected || telemetry.truck.speed < 1;
+}
+
+checkForUpdate();
+setInterval(checkForUpdate, 15 * 60 * 1000);
+setInterval(() => {
+  if (pendingUpdateVersion && prefs.autoUpdate && safeToApplyUpdate()) location.reload();
+}, 5000);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkForUpdate();
+});
 
 $('apiBaseInput').value = apiBase;
 $('apiBaseInput').addEventListener('change', () => {

@@ -33,6 +33,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
   if (url.pathname.startsWith('/api/')) return;
+  // The app's own update check (see index.html) needs to know what's
+  // actually live, not the cached shell it's asking on behalf of —
+  // otherwise it would always read back its own stale copy and never
+  // notice a new one shipped.
+  if (event.request.headers.has('X-Rig-Radar-Check')) return;
   event.respondWith(
     caches.open(CACHE).then((cache) =>
       cache.match(event.request).then((hit) => {
