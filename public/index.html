@@ -551,7 +551,7 @@ function apiUrl(path) { return apiBase + path; }
 // every shell change — there's no server round-trip to derive it from,
 // since the whole point is telling the two apart when they can't reach
 // each other yet.
-const SHELL_VERSION = '2.18.3';
+const SHELL_VERSION = '2.19.0';
 
 // ---------------------------------------------------------------------------
 // Preferences
@@ -607,6 +607,7 @@ let roads = [];          // polylines from /api/geo, once the map is compiled
 let labels = { cities: [], companies: [] };
 let signs = [];          // highway shields, from /api/geo
 let cityAreas = [];      // urban footprint rectangles, from /api/geo
+let areas = [];          // lot/building footprint polygons, from /api/geo
 let ferries = [];        // ferry crossings, from /api/geo
 let facilities = [];     // gas, rest stops, repair shops, etc., from /api/geo
 
@@ -785,6 +786,7 @@ async function refreshGeo() {
       cityAreas = body.cityAreas || [];
       ferries = body.ferries || [];
       facilities = body.facilities || [];
+      areas = body.areas || [];
     }
   } catch {
     // Next interval tick tries again; a missed refresh just delays new road
@@ -1025,6 +1027,37 @@ function drawCityAreas() {
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
+  }
+}
+
+// SCS's own MapAreaColor convention (def/map_data.sii): 0 road (paved
+// surface), 1 light, 2 dark (building tones), 3 green (grass/median) — the
+// only indices tools/compile-map.mjs keeps (its own "nav" debug colours
+// are dropped there, never sent here). Values picked close to
+// truckermudgeon/maps' own dark-mode palette (a real, verified rendering
+// of this same SCS data), tuned down slightly for Rig Radar's darker navy
+// background rather than their lighter dark-mode ground.
+const AREA_FILL = {
+  0: 'hsl(200, 5%, 28%)',
+  1: 'hsl(38, 36%, 40%)',
+  2: 'hsl(38, 30%, 28%)',
+  3: 'hsl(143, 25%, 26%)',
+};
+
+/** Lot and building footprints — parking lots, warehouses, company yards —
+ * the fill counterpart to drawRoads()'s strokes. Drawn before roads so a
+ * road crossing a lot's edge still reads as the road sitting on top of the
+ * ground, not the other way round. */
+function drawLotAreas() {
+  if (!areas.length) return;
+  for (const a of areas) {
+    const fill = AREA_FILL[a.color];
+    if (!fill || a.pts.length < 6) continue;
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    traceFlatPolyline(a.pts);
+    ctx.closePath();
+    ctx.fill();
   }
 }
 
@@ -1765,6 +1798,7 @@ function render() {
   ctx.fillRect(0, 0, W, H);
   drawGrid();
   drawCityAreas();
+  drawLotAreas();
   drawEmptyState();
   drawRoads();
   drawFerries();

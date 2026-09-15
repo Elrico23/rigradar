@@ -477,6 +477,7 @@ async function requestHandler(req, res) {
       cityAreas: map.compiled.cityAreasInView(minX, maxX, minZ, maxZ),
       ferries: map.compiled.ferriesInView(minX, maxX, minZ, maxZ),
       facilities: showDetail ? map.compiled.facilitiesInView(minX, maxX, minZ, maxZ) : [],
+      areas: showDetail ? map.compiled.areasInView(minX, maxX, minZ, maxZ) : [],
     });
   }
 

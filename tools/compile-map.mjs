@@ -16,6 +16,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { encodeRoads } from '../lib/roadformat.js';
+import { encodeAreas } from '../lib/areaformat.js';
 import { fitProjection } from '../lib/coords.js';
 
 const GAME = process.argv[2];
@@ -227,7 +228,16 @@ function classifyLanes(left, right) {
   return 2;
 }
 
-let prefabsPlaced = 0, prefabsSkipped = 0, prefabSegments = 0;
+// SCS's own MapAreaColor convention (def/map_data.sii): 0 road (paved
+// surface), 1 light, 2 dark (building tones), 3 green (grass/median).
+// 4-8 are "nav" colours used for in-editor debug visualisation, never
+// shown to a player in the actual game — skipped below rather than
+// guessed at, so a lot doesn't end up filled in some arbitrary bright hue
+// that never appears on a real TruckSim screen.
+const AREA_COLOR_MAX_REAL = 3;
+
+const areas = [];
+let prefabsPlaced = 0, prefabsSkipped = 0, prefabSegments = 0, prefabAreas = 0;
 
 for (const p of prefabs) {
   const desc = prefabDescByToken.get(p.token);
@@ -265,11 +275,41 @@ for (const p of prefabs) {
       prefabSegments++;
     }
   }
+
+  // Building/lot footprints — the other half of a prefab's mapPoints.
+  // Each 'polygon' point has exactly two neighbours (it's a closed ring),
+  // so walking "whichever neighbour isn't already in this ring yet" traces
+  // the whole shape and stops exactly when it closes — same technique
+  // truckermudgeon/maps' own toRoadStringsAndPolygons uses (prefabs.ts).
+  const visitedAreaPoints = new Set();
+  for (const point of mapPoints) {
+    if (point.type !== 'polygon' || visitedAreaPoints.has(point) || point.color > AREA_COLOR_MAX_REAL) continue;
+    const ring = new Set();
+    let cur = point;
+    do {
+      ring.add(cur);
+      visitedAreaPoints.add(cur);
+      const [a, b] = cur.neighbors.map((idx) => mapPoints[idx]);
+      if (a && !ring.has(a)) cur = a;
+      else if (b && !ring.has(b)) cur = b;
+    } while (!ring.has(cur));
+    if (ring.size < 3) continue;
+
+    const pts = [];
+    for (const rp of ring) {
+      const w = toWorld(rp.x, rp.y);
+      pts.push(w.x, w.z);
+    }
+    areas.push({ color: point.color, pts });
+    prefabAreas++;
+  }
+
   prefabsPlaced++;
 }
-console.log(`  prefab interiors: ${prefabsPlaced} placed (${prefabSegments} segments added), ${prefabsSkipped} skipped (no description/anchor match)`);
+console.log(`  prefab interiors: ${prefabsPlaced} placed (${prefabSegments} segments, ${prefabAreas} lot/building areas added), ${prefabsSkipped} skipped (no description/anchor match)`);
 
 writeFileSync(join(OUT_DIR, 'roads.bin'), encodeRoads(segments));
+writeFileSync(join(OUT_DIR, 'areas.bin'), encodeAreas(areas));
 
 // ---------------------------------------------------------------------------
 // 4. Routing graph — roads become edges; prefabs (junctions) get their
