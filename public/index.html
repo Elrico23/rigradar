@@ -551,7 +551,7 @@ function apiUrl(path) { return apiBase + path; }
 // every shell change — there's no server round-trip to derive it from,
 // since the whole point is telling the two apart when they can't reach
 // each other yet.
-const SHELL_VERSION = '2.18.2';
+const SHELL_VERSION = '2.18.3';
 
 // ---------------------------------------------------------------------------
 // Preferences
@@ -1628,10 +1628,29 @@ const MAP_ARROW_HEAD_SPREAD = (42 * Math.PI) / 180;
 const MAP_ARROW_MAX_ANGLE = 150;
 const MAP_ARROW_STEM_LEN = 15;
 
+// The manoeuvre's own (x, z) is deliberately the raw graph-node corner, not
+// a point on the smoothed route curve (see buildManoeuvres in router.js) —
+// right for the live distance countdown, wrong for drawing on top of the
+// curve drawRoute() actually renders. The gap between the two is a few
+// metres, invisible at a normal zoom but obvious at the tighter tilt zoom
+// this app now uses — the chevron would float off to the side of the
+// visible road. Anchoring to the nearest point on the smoothed route
+// instead keeps it sitting on the line without touching the countdown math.
+function nearestRoutePoint(x, z) {
+  if (!route?.points?.length) return null;
+  let best = route.points[0], bestD = Infinity;
+  for (const p of route.points) {
+    const d = (p.x - x) ** 2 + (p.z - z) ** 2;
+    if (d < bestD) { bestD = d; best = p; }
+  }
+  return best;
+}
+
 function drawManoeuvreArrow() {
   if (!route?.manoeuvres?.length) return;
   const m = route.manoeuvres[0];
-  const [x, y] = project(m.x, m.z);
+  const anchor = nearestRoutePoint(m.x, m.z) || m;
+  const [x, y] = project(anchor.x, anchor.z);
   if (overlapsReservedUI(x - 26, y - 26, x + 26, y + 26)) return;
 
   // The stem points back along the heading *before* the turn — same as
