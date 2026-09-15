@@ -464,11 +464,27 @@ async function requestHandler(req, res) {
     // sub-pixel clutter anyway and cost real bytes over a phone connection —
     // a full-map query on a real compiled map measured 9+ MB and 300ms+
     // before this cutoff existed. maxClass 0 = motorways only, 1 = + major,
-    // 2 = everything. Signs and company names are similarly illegible past
-    // a point, so they're dropped rather than sent and silently discarded.
+    // 2 = everything. Signs, facilities and lot areas are similarly
+    // illegible past a point, so they're dropped rather than sent and
+    // silently discarded.
+    //
+    // Keyed off the client's own on-screen scale (mpp = its metresPerPixel)
+    // rather than the query box's span — those used to track together, but
+    // the tilt-mode fetch (2.18.1) now deliberately stretches the box far
+    // ahead of the truck to cover what perspective compression shows near
+    // the horizon, so a tight, close-up tilt view can still carry a 25km+
+    // span. Keying off span there was silently dropping signs/facilities/
+    // areas at ordinary highway speed even though the view itself was
+    // nowhere near zoomed out. mpp actually measures screen density, which
+    // is what this cutoff was always meant to react to.
+    const mpp = Number(url.searchParams.get('mpp'));
     const span = Math.max(maxX - minX, maxZ - minZ);
-    const maxClass = span > 60000 ? 0 : span > 20000 ? 1 : 2;
-    const showDetail = span < 20000;
+    // 800 ≈ a typical phone screen's longer dimension in pixels, so this
+    // reconstructs what the (pre-tilt-fetch) flat span used to be at this
+    // mpp — the scale these thresholds were originally tuned against.
+    const scale = Number.isFinite(mpp) && mpp > 0 ? mpp * 800 : span;
+    const maxClass = scale > 60000 ? 0 : scale > 20000 ? 1 : 2;
+    const showDetail = scale < 20000;
 
     return json(res, 200, {
       roads: map.compiled.roadsInView(minX, maxX, minZ, maxZ, 400, maxClass),

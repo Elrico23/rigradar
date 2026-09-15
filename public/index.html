@@ -551,7 +551,7 @@ function apiUrl(path) { return apiBase + path; }
 // every shell change — there's no server round-trip to derive it from,
 // since the whole point is telling the two apart when they can't reach
 // each other yet.
-const SHELL_VERSION = '2.19.0';
+const SHELL_VERSION = '2.19.1';
 
 // ---------------------------------------------------------------------------
 // Preferences
@@ -772,7 +772,11 @@ async function refreshGeo() {
     maxZ = Math.max(maxZ, aheadZ + 300);
   }
 
-  const params = new URLSearchParams({ game: telemetry.game, minX, maxX, minZ, maxZ });
+  // mpp tells the server how zoomed-in the view actually is, so its own
+  // level-of-detail cutoff can react to that instead of this box's span —
+  // the tilt-ahead extension above can make the span alone look like a
+  // zoomed-out view even when the screen itself is tightly zoomed in.
+  const params = new URLSearchParams({ game: telemetry.game, minX, maxX, minZ, maxZ, mpp: view.metresPerPixel });
 
   geoInFlight = true;
   lastGeoCentre = { x: view.centre.x, z: view.centre.z };
