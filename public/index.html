@@ -551,7 +551,7 @@ function apiUrl(path) { return apiBase + path; }
 // every shell change — there's no server round-trip to derive it from,
 // since the whole point is telling the two apart when they can't reach
 // each other yet.
-const SHELL_VERSION = '2.18.1';
+const SHELL_VERSION = '2.18.2';
 
 // ---------------------------------------------------------------------------
 // Preferences
@@ -1063,10 +1063,29 @@ function drawFerries() {
 // visited state; only the fill does, same as the real game just recolouring
 // the road surface rather than its outline.
 const ROAD_STYLE_ORDER = [
-  { cls: 2, casingW: 3,   casing: '#1a1a1a', fillW: 1.4, fill: '#454545', vFill: '#d99a2b' }, // local
-  { cls: 1, casingW: 5,   casing: '#1e1e1e', fillW: 3,   fill: '#5a5a5a', vFill: '#e8ac33' }, // major
-  { cls: 0, casingW: 7.5, casing: '#222222', fillW: 5,   fill: '#8a8a8a', vFill: '#ffc93c' }, // motorway
+  { cls: 2, casing: '#1a1a1a', fill: '#454545', vFill: '#d99a2b' }, // local
+  { cls: 1, casing: '#1e1e1e', fill: '#5a5a5a', vFill: '#e8ac33' }, // major
+  { cls: 0, casing: '#222222', fill: '#8a8a8a', vFill: '#ffc93c' }, // motorway
 ];
+
+// Real lane-count-derived road width, in world metres — a fixed pixel
+// stroke (the previous approach) doesn't track zoom, so once the tilt
+// zoom got tight enough to actually reveal it, roads read as thin
+// scratches next to TruckSim GPS's own proportionally-wide rendering.
+// Clamped so a road neither vanishes when zoomed way out nor turns into
+// a fat blob when zoomed way in (e.g. parked, max zoom).
+const ROAD_WIDTH_METRES = { 2: 3.5, 1: 7, 0: 14 }; // local / major / motorway
+const ROAD_WIDTH_MIN_PX = 1.2;
+const ROAD_WIDTH_MAX_PX = 22;
+// The dark edge framing the fill — a cartographic border, not a physical
+// feature, so it stays roughly this many pixels regardless of zoom rather
+// than scaling with the road itself.
+const ROAD_CASING_MARGIN_PX = 4;
+
+function roadFillWidthPx(cls) {
+  const raw = ROAD_WIDTH_METRES[cls] / view.metresPerPixel;
+  return Math.min(ROAD_WIDTH_MAX_PX, Math.max(ROAD_WIDTH_MIN_PX, raw));
+}
 
 // Roads have no persistent per-segment ID in the compiled format (they're
 // anonymous point arrays, not addressable) — so "visited" is approximated
@@ -1160,7 +1179,8 @@ function drawRoads() {
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
   for (const style of ROAD_STYLE_ORDER) {
-    ctx.lineWidth = style.casingW;
+    const fillW = roadFillWidthPx(style.cls);
+    ctx.lineWidth = fillW + ROAD_CASING_MARGIN_PX;
     ctx.strokeStyle = style.casing;
     ctx.beginPath();
     for (const line of roads) {
@@ -1169,7 +1189,7 @@ function drawRoads() {
     }
     ctx.stroke();
 
-    ctx.lineWidth = style.fillW;
+    ctx.lineWidth = fillW;
     ctx.strokeStyle = style.fill;
     ctx.beginPath();
     for (const line of roads) {
@@ -1200,19 +1220,21 @@ function drawRoute() {
   // a noticeably brighter cyan than the medium blue (#2e8fea) picked from
   // an earlier reference image, not the app's teal accent used elsewhere
   // on the map.
-  // Wider than the road it overlays (20/13 vs. the widest road style's own
-  // 7.5px casing) on purpose: route.points is a server-smoothed curve, not
-  // the same polyline drawRoads() traces for the raw road underneath it,
-  // so at a sharp bend the two paths diverge by a couple of pixels — barely
-  // visible at a normal zoom, but the much tighter tilt-view zoom (0.15x
-  // of the flat span, since 2.10.3) magnifies that same real-world gap
-  // enough to show a sliver of the visited-orange road peeking out on the
-  // inside of the curve. More margin here is cheaper than perfectly
-  // reconciling two independently-computed paths.
+  // Wider than the road it overlays on purpose: route.points is a
+  // server-smoothed curve, not the same polyline drawRoads() traces for the
+  // raw road underneath it, so at a sharp bend the two paths diverge by a
+  // couple of pixels — barely visible at a normal zoom, but the much
+  // tighter tilt-view zoom magnifies that same real-world gap enough to
+  // show a sliver of the visited-orange road peeking out on the inside of
+  // the curve. Scales with the same per-metre road width as drawRoads()
+  // now uses (rather than a fixed 20/13px), so that margin holds at every
+  // zoom instead of only the zoom level it was last tuned against.
+  const motorwayCasingW = roadFillWidthPx(0) + ROAD_CASING_MARGIN_PX;
+  const routeCasingW = motorwayCasingW + 12.5;
   // Plain solid fill, not a dashed centreline — matches TruckSim GPS's own
   // route line directly (a dashed stripe read as a texture the user didn't
   // want, on request after a direct comparison).
-  for (const [width, colour] of [[20, 'rgba(10,14,20,.85)'], [13, '#3ad6f5']]) {
+  for (const [width, colour] of [[routeCasingW, 'rgba(10,14,20,.85)'], [routeCasingW - 7, '#3ad6f5']]) {
     ctx.lineWidth = width;
     ctx.strokeStyle = colour;
     ctx.beginPath();
