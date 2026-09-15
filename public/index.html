@@ -551,7 +551,7 @@ function apiUrl(path) { return apiBase + path; }
 // every shell change — there's no server round-trip to derive it from,
 // since the whole point is telling the two apart when they can't reach
 // each other yet.
-const SHELL_VERSION = '2.19.1';
+const SHELL_VERSION = '2.19.2';
 
 // ---------------------------------------------------------------------------
 // Preferences
@@ -1391,7 +1391,15 @@ function drawCompanyBadge(x, y) {
  * pill. Colour-coding them the same way makes the map legible at a glance
  * rather than every road number looking identical. */
 function shieldStyle(label) {
-  if (/^[IA][\s-]/i.test(label)) return { bg: '#2c5aa0', fg: '#ffffff', border: '#ffffff', interstate: true };
+  // ATS's own interstate icon sprites are named with an "is" prefix, not a
+  // bare "i" — formatShield() (compile-map.mjs) upper-cases that straight
+  // through, so a real interstate reads "IS 84" here, never "I 84"/"I-84".
+  // Matching only [IA] missed every single one, silently falling through to
+  // the plain dark pill every other road class gets — confirmed on a live
+  // side-by-side where TruckSim GPS showed a real interstate shield for the
+  // exact same road. ETS2's "A"-prefixed motorways (e.g. "A 7") still match
+  // the plain single-letter case.
+  if (/^(IS|I|A)[\s-]/i.test(label)) return { bg: '#2c5aa0', fg: '#ffffff', border: '#ffffff', interstate: true };
   if (/^US[\s-]/i.test(label)) return { bg: '#eef3f6', fg: '#10161c', border: '#10161c' };    // US route
   if (/^E[\s-]/i.test(label)) return { bg: '#2f6e3f', fg: '#ffffff', border: '#ffffff' };     // European route
   return { bg: '#212b36', fg: '#dce6ec', border: '#7a8a9a' };                                  // state / B-road / other
@@ -1451,7 +1459,7 @@ function drawSigns() {
     // the "I"/"A" prefix used elsewhere in this app to tell the category
     // apart — that distinction is already carried by the shield's own
     // colour and shape here, so repeating it inside would just be noise.
-    const number = style.interstate ? s.label.replace(/^[IA][\s-]*/i, '') : s.label;
+    const number = style.interstate ? s.label.replace(/^(IS|I|A)[\s-]*/i, '') : s.label;
     const w = ctx.measureText(number).width + (style.interstate ? 14 : 10);
     const h = style.interstate ? Math.max(20, w * 0.85) : 18;
     const x0 = x - w / 2, y0 = y - h / 2, x1 = x + w / 2, y1 = y + h / 2;
