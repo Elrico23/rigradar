@@ -4,6 +4,19 @@ Compressed history for context — what changed and why, not a full diff.
 Built collaboratively with Claude across one long chat session; see
 SETUP.md for current setup and known limitations.
 
+**2.21.0** — Visited-road history can now sync across devices, via a
+Supabase table (`visited_road_cells`) and a sync code you set in Settings
+— leave it blank and behaviour is unchanged (purely local, as before).
+Devices sharing a code push newly-visited 300m cells on the existing 5s
+localStorage flush and pull others' cells on a slower 20s interval, merged
+into the same local Set that already drives the visited-orange road
+rendering. No client SDK added — plain `fetch()` against Supabase's REST
+API, to keep the phone app dependency-free. There's no real per-user auth
+behind this: the sync code itself, shared only between your own devices,
+is the only access control (RLS on the table allows the anon key full
+read/write, filtered by whatever code the client asks for) — acceptable
+here since the data is just road-visited markers, not sensitive.
+
 **2.16.1** — Fixed company-name labels turning into a wall of overlapping
 text at dense industrial/depot clusters, flagged with a screenshot next
 to the base game's own in-dash GPS (which marks a cluster like that with

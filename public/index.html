@@ -505,6 +505,11 @@
       <input class="field" id="apiBaseInput" style="margin-bottom:0"
         placeholder="e.g. https://192.168.0.x:3443 — leave blank otherwise">
     </div>
+    <div class="row" style="flex-direction:column; align-items:stretch; gap:6px;">
+      <span>Sync code (same code on every device shares visited-road history)</span>
+      <input class="field" id="syncCodeInput" style="margin-bottom:0"
+        placeholder="e.g. a passphrase only your devices use — leave blank to keep this device local">
+    </div>
     <div class="row"><span>App version</span><b id="appVersionVal">—</b></div>
     <div class="row"><span>Server version</span><b id="versionVal">—</b></div>
     <div class="row"><span>Close</span><button class="round" data-close aria-label="Close">
@@ -551,7 +556,7 @@ function apiUrl(path) { return apiBase + path; }
 // every shell change — there's no server round-trip to derive it from,
 // since the whole point is telling the two apart when they can't reach
 // each other yet.
-const SHELL_VERSION = '2.20.0';
+const SHELL_VERSION = '2.21.0';
 
 // ---------------------------------------------------------------------------
 // Preferences
@@ -1182,17 +1187,98 @@ function readVisitedCells() {
   catch { return []; }
 }
 
+function cellCoord(x, z) {
+  return `${Math.floor(x / VISITED_CELL_METRES)},${Math.floor(z / VISITED_CELL_METRES)}`;
+}
+
 function visitedCellKey(game, x, z) {
-  return `${game}:${Math.floor(x / VISITED_CELL_METRES)},${Math.floor(z / VISITED_CELL_METRES)}`;
+  return `${game}:${cellCoord(x, z)}`;
 }
 
 function markVisited(game, x, z) {
-  const key = visitedCellKey(game, x, z);
+  const cell = cellCoord(x, z);
+  const key = `${game}:${cell}`;
   if (!visitedCells.has(key)) {
     visitedCells.add(key);
     visitedDirty = true;
+    if (syncCode) pendingSyncCells.push({ sync_code: syncCode, game, cell });
   }
 }
+
+// ---------------------------------------------------------------------------
+// Cross-device sync of visited-road history, via Supabase's REST API
+// directly (no client SDK — this project stays dependency-free). Devices
+// sharing the same sync code (set in Settings) share one visited-road set;
+// there's no real per-user auth behind it, the code itself is the only
+// access control (see the table's RLS policy). Off by default — an empty
+// code means purely local, matching the original localStorage-only
+// behaviour.
+// ---------------------------------------------------------------------------
+
+const SUPABASE_URL = 'https://lpofldvygptoakztuaqe.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxwb2ZsZHZ5Z3B0b2FrenR1YXFlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc2NjI5NTgsImV4cCI6MjEwMzIzODk1OH0.jphyOavgSd0c9Pw4qAVbKQwrYntCPBrFU1VCqkI26vQ';
+
+function readSyncCode() {
+  try { return localStorage.getItem('rigradar.syncCode') || ''; }
+  catch { return ''; }
+}
+let syncCode = readSyncCode();
+const pendingSyncCells = [];
+
+function readSyncedSince() {
+  try { return localStorage.getItem('rigradar.syncedSince') || ''; }
+  catch { return ''; }
+}
+function saveSyncedSince(iso) {
+  try { localStorage.setItem('rigradar.syncedSince', iso); } catch {}
+}
+
+async function pushVisitedCells() {
+  if (!syncCode || !pendingSyncCells.length) return;
+  const batch = pendingSyncCells.splice(0, pendingSyncCells.length);
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/visited_road_cells`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        Prefer: 'resolution=ignore-duplicates,return=minimal',
+      },
+      body: JSON.stringify(batch),
+    });
+    if (!res.ok) pendingSyncCells.unshift(...batch);
+  } catch { pendingSyncCells.unshift(...batch); }
+}
+
+// No `since` filter means a fresh code (or a device that's never synced
+// this code before) pulls its whole shared history in one go, not just
+// what's added from now on.
+async function pullVisitedCells() {
+  if (!syncCode) return;
+  const since = readSyncedSince();
+  const params = new URLSearchParams({
+    sync_code: `eq.${syncCode}`,
+    select: 'game,cell,created_at',
+    order: 'created_at.asc',
+  });
+  if (since) params.set('created_at', `gt.${since}`);
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/visited_road_cells?${params}`, {
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+    });
+    if (!res.ok) return;
+    const rows = await res.json();
+    for (const row of rows) {
+      const key = `${row.game}:${row.cell}`;
+      if (!visitedCells.has(key)) { visitedCells.add(key); visitedDirty = true; }
+    }
+    if (rows.length) saveSyncedSince(rows[rows.length - 1].created_at);
+  } catch {}
+}
+
+setInterval(() => { pushVisitedCells(); pullVisitedCells(); }, 20000);
+if (syncCode) pullVisitedCells();
 
 // How close a road's own sample point has to be to the truck's live
 // position to count as "this is the road under the truck right now", as
@@ -2666,6 +2752,14 @@ $('apiBaseInput').addEventListener('change', () => {
   const next = $('apiBaseInput').value.trim().replace(/\/$/, '');
   try { localStorage.setItem('rigradar.apiBase', next); } catch {}
   location.reload();
+});
+
+$('syncCodeInput').value = syncCode;
+$('syncCodeInput').addEventListener('change', () => {
+  syncCode = $('syncCodeInput').value.trim();
+  try { localStorage.setItem('rigradar.syncCode', syncCode); } catch {}
+  saveSyncedSince('');
+  if (syncCode) pullVisitedCells();
 });
 
 if ('serviceWorker' in navigator) {
