@@ -900,7 +900,10 @@ const anchorY = () => {
  * this reduces exactly to the original flat linear mapping — so turning
  * either heading-up or tilt off is provably identical to how the map has
  * always worked. */
-const TILT_STRENGTH = 1.8;
+// Bumped from 1.8 on explicit request for a steeper camera and more road
+// convergence, without a fresh TruckSim side-by-side to confirm against —
+// re-check next time a reference photo is handy.
+const TILT_STRENGTH = 2.6;
 
 // A real 3D GPS view doesn't just push distant things toward the horizon —
 // it draws them smaller, which is the actual cue that reads as "3D" rather
