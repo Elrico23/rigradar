@@ -27,7 +27,7 @@
 <body>
 <div id="out"></div>
 <form id="setup">
-  <p>One-time setup. Token is the ASSISTANT_TOKEN you set on the PC.</p>
+  <p>One-time setup. Enter your assistant token.</p>
   <input id="token" type="password" placeholder="Assistant token" autocomplete="off">
   <button>Save</button>
 </form>
@@ -40,6 +40,9 @@ const $ = (id) => document.getElementById(id);
 const out = $('out'), btn = $('btn'), statusEl = $('status'), setup = $('setup');
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 const messages = [];
+// Hosted function, so this works with the PC off. If this page is served by
+// the PC's own server (Rig Radar), that server's /api/ask would work too.
+const ENDPOINT = 'https://lpofldvygptoakztuaqe.supabase.co/functions/v1/ask';
 let token = '';
 try { token = localStorage.getItem('assistantToken') || ''; } catch {}
 
@@ -69,7 +72,7 @@ async function send(text) {
   line('you', text);
   btn.className = 'busy'; statusEl.textContent = 'Thinking…';
   try {
-    const r = await fetch('/api/ask', {
+    const r = await fetch(ENDPOINT, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-assistant-token': token },
       body: JSON.stringify({ messages }),
