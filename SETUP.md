@@ -306,3 +306,20 @@ it, which is why the truck sits on the road instead of near it.
 - The parser is GPL v3. Using its *output* to drive your own app is fine,
   but publishing Rig Radar with any of its code inside brings the GPL with
   it — worth knowing if this ever goes on the channel.
+
+## Voice assistant (ask.html)
+
+A one-button "hold to talk" assistant. It runs without the PC: the page is
+served by GitHub Pages and calls the Supabase edge function in
+`supabase/functions/ask`, which holds the Anthropic key.
+
+Deploy once (Supabase CLI), then set the two secrets:
+
+    supabase functions deploy ask --no-verify-jwt --project-ref lpofldvygptoakztuaqe
+    supabase secrets set ANTHROPIC_API_KEY=sk-ant-... ASSISTANT_TOKEN=pick-a-long-secret \
+        --project-ref lpofldvygptoakztuaqe
+
+Open `<pages url>/ask.html` in Chrome on the phone, enter the token once, hold
+the button, speak, release. `ASSISTANT_MODEL` (a secret) overrides the default
+claude-haiku-5-5. The PC server's own `/api/ask` (lib/assistant.js) still
+exists for local use.
