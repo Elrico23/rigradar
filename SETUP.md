@@ -306,3 +306,16 @@ it, which is why the truck sits on the road instead of near it.
 - The parser is GPL v3. Using its *output* to drive your own app is fine,
   but publishing Rig Radar with any of its code inside brings the GPL with
   it — worth knowing if this ever goes on the channel.
+
+## Voice assistant (ask.html)
+
+A one-button "hold to talk" assistant on the phone. The API key stays on the
+PC; the phone only talks to this server.
+
+    ANTHROPIC_API_KEY=sk-ant-... ASSISTANT_TOKEN=pick-a-long-secret node server.js
+
+Open `/ask.html` on the phone (Chrome), enter the token once, then hold the
+button, speak, release. Replies are spoken aloud. `ASSISTANT_MODEL` overrides
+the default (claude-haiku-5-5). It only works against the PC's server, not the
+static GitHub Pages copy, and needs the phone to reach the PC (same Wi-Fi or
+HTTPS, since mic access needs a secure origin on anything but localhost).

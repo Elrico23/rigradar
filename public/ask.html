@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0e14">
+<title>Ask</title>
+<style>
+  :root { color-scheme: dark; }
+  html, body { margin: 0; height: 100%; background: #0a0e14; color: #e8edf3; font-family: system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+         padding: max(24px, env(safe-area-inset-top)) 20px max(32px, env(safe-area-inset-bottom)); box-sizing: border-box; }
+  #out { flex: 1; width: 100%; max-width: 560px; overflow-y: auto; font-size: 1.15rem; line-height: 1.5; }
+  .you { color: #8a96a6; margin: 14px 0 4px; }
+  .ai { margin: 0 0 8px; }
+  #btn { width: 168px; height: 168px; border-radius: 50%; border: 0; background: #ff9f1c; color: #0a0e14;
+         font-size: 1.1rem; font-weight: 700; touch-action: manipulation; transition: transform .1s; }
+  #btn.live { background: #2ec27e; transform: scale(1.08); }
+  #btn.busy { background: #5b6675; }
+  #status { min-height: 1.4em; margin: 14px 0; color: #8a96a6; font-size: .95rem; text-align: center; }
+  #setup { display: none; width: 100%; max-width: 560px; }
+  #setup input { width: 100%; box-sizing: border-box; padding: 12px; font-size: 1rem; margin: 8px 0;
+                 border-radius: 8px; border: 1px solid #2a3340; background: #121821; color: inherit; }
+  #setup button { padding: 12px 18px; font-size: 1rem; border-radius: 8px; border: 0; background: #ff9f1c; font-weight: 700; }
+</style>
+</head>
+<body>
+<div id="out"></div>
+<form id="setup">
+  <p>One-time setup. Token is the ASSISTANT_TOKEN you set on the PC.</p>
+  <input id="token" type="password" placeholder="Assistant token" autocomplete="off">
+  <button>Save</button>
+</form>
+<div>
+  <div id="status"></div>
+  <button id="btn" type="button">Hold to talk</button>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+const out = $('out'), btn = $('btn'), statusEl = $('status'), setup = $('setup');
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const messages = [];
+let token = '';
+try { token = localStorage.getItem('assistantToken') || ''; } catch {}
+
+function say(text) {
+  if (!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+}
+function line(cls, text) {
+  const p = document.createElement('p');
+  p.className = cls; p.textContent = text;
+  out.appendChild(p); out.scrollTop = out.scrollHeight;
+}
+function needSetup() { setup.style.display = 'block'; btn.style.display = 'none'; }
+
+setup.addEventListener('submit', (e) => {
+  e.preventDefault();
+  token = $('token').value.trim();
+  try { localStorage.setItem('assistantToken', token); } catch {}
+  setup.style.display = 'none'; btn.style.display = '';
+});
+if (!token) needSetup();
+if (!SR) statusEl.textContent = 'Speech input is not supported in this browser (try Chrome).';
+
+async function send(text) {
+  messages.push({ role: 'user', content: text });
+  line('you', text);
+  btn.className = 'busy'; statusEl.textContent = 'Thinking…';
+  try {
+    const r = await fetch('/api/ask', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-assistant-token': token },
+      body: JSON.stringify({ messages }),
+    });
+    const data = await r.json();
+    if (r.status === 401) { messages.pop(); needSetup(); throw new Error('Token rejected, enter it again.'); }
+    if (!r.ok) throw new Error(data.message || 'Request failed');
+    messages.push({ role: 'assistant', content: data.reply });
+    line('ai', data.reply); say(data.reply);
+    statusEl.textContent = '';
+  } catch (err) {
+    if (messages[messages.length - 1]?.role === 'user') messages.pop();
+    statusEl.textContent = err.message;
+  } finally { btn.className = ''; }
+}
+
+let rec = null, heard = '';
+function start() {
+  if (!SR || btn.className === 'busy') return;
+  speechSynthesis.cancel();
+  heard = '';
+  rec = new SR();
+  rec.lang = navigator.language || 'en-ZA';
+  rec.interimResults = true;
+  rec.onresult = (e) => { heard = Array.from(e.results).map((r) => r[0].transcript).join(' '); statusEl.textContent = heard; };
+  rec.onerror = (e) => { statusEl.textContent = 'Mic: ' + e.error; };
+  rec.onend = () => { btn.className = btn.className === 'busy' ? 'busy' : ''; if (heard.trim()) send(heard.trim()); else if (!statusEl.textContent.startsWith('Mic')) statusEl.textContent = ''; };
+  rec.start();
+  btn.className = 'live'; btn.textContent = 'Listening…';
+}
+function stop() { if (rec) rec.stop(); btn.textContent = 'Hold to talk'; }
+btn.addEventListener('pointerdown', (e) => { e.preventDefault(); start(); });
+btn.addEventListener('pointerup', stop);
+btn.addEventListener('pointercancel', stop);
+btn.addEventListener('contextmenu', (e) => e.preventDefault());
+</script>
+</body>
+</html>

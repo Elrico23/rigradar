@@ -23,6 +23,7 @@ const { spawn } = require('node:child_process');
 
 const { Projection } = require('./lib/coords');
 const { loadCompiledMap } = require('./lib/mapdata');
+const assistant = require('./lib/assistant');
 
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
@@ -390,7 +391,7 @@ async function requestHandler(req, res) {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Assistant-Token',
       'Access-Control-Max-Age': '86400',
     });
     return res.end();
@@ -537,6 +538,35 @@ async function requestHandler(req, res) {
       const result = map.compiled.routeTo({ x: from.x, z: from.z }, parsed.to);
       if (result.error) return json(res, 404, result);
       return json(res, 200, result);
+    });
+    return;
+  }
+
+  if (url.pathname === '/api/ask' && req.method === 'POST') {
+    if (!assistant.configured()) {
+      return json(res, 503, { error: 'not-configured', message: 'Set ANTHROPIC_API_KEY and ASSISTANT_TOKEN, then restart.' });
+    }
+    if (req.headers['x-assistant-token'] !== process.env.ASSISTANT_TOKEN) {
+      return json(res, 401, { error: 'unauthorized', message: 'Wrong or missing token.' });
+    }
+    let body = '';
+    req.on('data', (c) => {
+      body += c;
+      if (body.length > 100_000) req.destroy();
+    });
+    req.on('end', async () => {
+      let parsed;
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 400, { error: 'bad-request', message: 'Invalid JSON body.' });
+      }
+      try {
+        const out = await assistant.ask(Array.isArray(parsed.messages) ? parsed.messages : []);
+        return json(res, out.status, out.body);
+      } catch (err) {
+        return json(res, 502, { error: 'upstream', message: err.message });
+      }
     });
     return;
   }
